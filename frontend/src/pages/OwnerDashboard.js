@@ -12,7 +12,8 @@ function OwnerDashboard() {
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const rawUser = JSON.parse(localStorage.getItem('user') || 'null');
+  const user = rawUser && typeof rawUser.id === 'number' ? rawUser : null;
 
   useEffect(() => {
     if (!token || !user) {
