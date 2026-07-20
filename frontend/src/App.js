@@ -4,7 +4,9 @@ import Home from './pages/Home';
 import Equipment from './pages/Equipment';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import Dashboard from './pages/Dashboard';
+import OwnerDashboard from './pages/OwnerDashboard';
+import AddEquipment from './pages/AddEquipment';
+import EditEquipment from './pages/EditEquipment';
 import Booking from './pages/Booking';
 import PaymentConfirmation from './pages/PaymentConfirmation';
 import './App.css';
@@ -19,6 +21,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setIsLoggedIn(false);
   };
 
@@ -43,6 +46,9 @@ function App() {
                     <Link to="/dashboard" className="nav-link">Dashboard</Link>
                   </li>
                   <li className="nav-item">
+                    <Link to="/add-equipment" className="nav-link sell-link">+ Sell Equipment</Link>
+                  </li>
+                  <li className="nav-item">
                     <button onClick={handleLogout} className="nav-link">Logout</button>
                   </li>
                 </>
@@ -65,7 +71,9 @@ function App() {
           <Route path="/equipment" element={<Equipment />} />
           <Route path="/login" element={<Login setIsLoggedIn={setIsLoggedIn} />} />
           <Route path="/signup" element={<Signup setIsLoggedIn={setIsLoggedIn} />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<OwnerDashboard />} />
+          <Route path="/add-equipment" element={<AddEquipment />} />
+          <Route path="/edit-equipment/:id" element={<EditEquipment />} />
           <Route path="/booking/:equipmentId" element={<Booking />} />
           <Route path="/payment-confirmation" element={<PaymentConfirmation />} />
         </Routes>

@@ -863,3 +863,247 @@ table th {
     padding: 2rem 1.5rem;
   }
 }
+
+/* Sell Equipment nav link */
+.sell-link {
+  color: var(--secondary-color);
+  font-weight: 700;
+}
+
+.sell-link:hover {
+  color: #ea580c;
+}
+
+/* Hero buttons */
+.hero-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: white;
+  border: 2px solid white;
+}
+
+.btn-outline:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Seller CTA Section */
+.seller-cta {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: white;
+  padding: 5rem 2rem;
+  text-align: center;
+  margin-top: 3rem;
+}
+
+.seller-cta-content h2 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.seller-cta-content p {
+  font-size: 1.15rem;
+  margin-bottom: 2rem;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Features Section */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 3rem auto;
+  padding: 0 2rem;
+}
+
+.feature-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.feature-card h3 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-dark);
+}
+
+.feature-card p {
+  color: var(--text-light);
+  font-size: 0.95rem;
+}
+
+/* Dashboard Header */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+/* Success Message */
+.success-message {
+  background-color: #d1fae5;
+  color: #065f46;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+/* Card Actions (Edit/Delete buttons) */
+.card-actions {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.card-actions .btn {
+  width: auto;
+  flex: 1;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+}
+
+.btn-danger {
+  background-color: #dc2626;
+  color: white;
+  border: 2px solid #dc2626;
+}
+
+.btn-danger:hover {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text-light);
+}
+
+.empty-state p {
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+}
+
+/* Owner name on equipment card */
+.owner-name {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  padding: 0 1.5rem 0.5rem;
+}
+
+/* Earnings Section */
+.earnings-section {
+  padding: 1rem 0;
+}
+
+.earnings-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.earnings-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.earnings-card.highlight {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.2), var(--shadow-md);
+}
+
+.earnings-card h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.earnings-amount {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.earnings-amount.commission {
+  color: var(--text-light);
+}
+
+/* Equipment form (Add/Edit) */
+.equipment-form {
+  max-width: 580px;
+}
+
+.equipment-form label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  margin-bottom: 0.35rem;
+  margin-top: 1rem;
+}
+
+.equipment-form label:first-of-type {
+  margin-top: 0;
+}
+
+.equipment-form textarea,
+.equipment-form select {
+  width: 100%;
+  padding: 0.875rem;
+  margin-bottom: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 1rem;
+  background-color: var(--bg-light);
+  color: var(--text-dark);
+  transition: border-color 0.3s ease;
+  font-family: inherit;
+}
+
+.equipment-form textarea:focus,
+.equipment-form select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+}
+
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin-top: 0.3rem;
+  margin-bottom: 1rem;
+}

@@ -2,9 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
-// Mock database for demo (replace with actual DB)
-const users = [];
+const { users } = require('../database/store');
 
 // Sign Up
 router.post('/signup', async (req, res) => {

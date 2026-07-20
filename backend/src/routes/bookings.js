@@ -1,8 +1,6 @@
 const express = require('express');
 const router = express.Router();
-
-// Mock database
-const bookings = [];
+const { bookings } = require('../database/store');
 
 // Get user's bookings
 router.get('/my-bookings', (req, res) => {
