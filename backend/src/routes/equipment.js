@@ -1,7 +1,16 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const authenticateToken = require('../middleware/auth');
 const { users, equipment } = require('../database/store');
+
+const writeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Get all equipment
 router.get('/', (req, res) => {
@@ -25,13 +34,15 @@ router.get('/', (req, res) => {
 
 // Get equipment listed by a specific owner
 router.get('/owner/:userId', (req, res) => {
-  const ownerItems = equipment.filter((e) => e.ownerId == req.params.userId);
+  const userId = parseInt(req.params.userId, 10);
+  const ownerItems = equipment.filter((e) => e.ownerId === userId);
   res.json(ownerItems);
 });
 
 // Get single equipment
 router.get('/:id', (req, res) => {
-  const item = equipment.find((e) => e.id == req.params.id);
+  const id = parseInt(req.params.id, 10);
+  const item = equipment.find((e) => e.id === id);
   if (!item) {
     return res.status(404).json({ error: 'Equipment not found' });
   }
@@ -39,7 +50,7 @@ router.get('/:id', (req, res) => {
 });
 
 // Create equipment (requires auth)
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', writeLimiter, authenticateToken, (req, res) => {
   const { name, description, category, pricePerDay, location, imageUrl } = req.body;
 
   if (!name || !pricePerDay) {
@@ -67,8 +78,9 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // Update equipment (only owner can edit)
-router.put('/:id', authenticateToken, (req, res) => {
-  const item = equipment.find((e) => e.id == req.params.id);
+router.put('/:id', writeLimiter, authenticateToken, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const item = equipment.find((e) => e.id === id);
   if (!item) {
     return res.status(404).json({ error: 'Equipment not found' });
   }
@@ -90,8 +102,9 @@ router.put('/:id', authenticateToken, (req, res) => {
 });
 
 // Delete equipment (only owner can delete)
-router.delete('/:id', authenticateToken, (req, res) => {
-  const index = equipment.findIndex((e) => e.id == req.params.id);
+router.delete('/:id', writeLimiter, authenticateToken, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const index = equipment.findIndex((e) => e.id === id);
   if (index === -1) {
     return res.status(404).json({ error: 'Equipment not found' });
   }

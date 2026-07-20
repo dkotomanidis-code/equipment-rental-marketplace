@@ -1,10 +1,19 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const { users, bookings, equipment } = require('../database/store');
 const authenticateToken = require('../middleware/auth');
 
+const earningsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 60,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // GET /api/users/:userId/earnings - Get owner's total earnings from rentals
-router.get('/:userId/earnings', authenticateToken, (req, res) => {
+router.get('/:userId/earnings', earningsLimiter, authenticateToken, (req, res) => {
   const userId = parseInt(req.params.userId, 10);
 
   if (req.user.id !== userId) {
