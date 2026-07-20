@@ -40,9 +40,10 @@ function Equipment() {
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="category-select">
           <option value="">All Categories</option>
           <option value="tools">Tools</option>
+          <option value="electronics">Electronics</option>
           <option value="sports">Sports</option>
-          <option value="cameras">Cameras</option>
-          <option value="outdoor">Outdoor</option>
+          <option value="furniture">Furniture</option>
+          <option value="other">Other</option>
         </select>
       </div>
 
@@ -57,6 +58,7 @@ function Equipment() {
               <p>{item.description}</p>
               <p className="price">${item.pricePerDay}/day</p>
               <p className="location">📍 {item.location}</p>
+              {item.ownerName && <p className="owner-name">🏷️ Listed by {item.ownerName}</p>}
               <Link to={`/booking/${item.id}`} className="btn btn-secondary">Book Now</Link>
             </div>
           ))
