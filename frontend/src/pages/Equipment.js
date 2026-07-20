@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 
 function Equipment() {
@@ -56,7 +57,7 @@ function Equipment() {
               <p>{item.description}</p>
               <p className="price">${item.pricePerDay}/day</p>
               <p className="location">📍 {item.location}</p>
-              <button className="btn btn-secondary">Book Now</button>
+              <Link to={`/booking/${item.id}`} className="btn btn-secondary">Book Now</Link>
             </div>
           ))
         ) : (

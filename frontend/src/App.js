@@ -5,6 +5,8 @@ import Equipment from './pages/Equipment';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
+import Booking from './pages/Booking';
+import PaymentConfirmation from './pages/PaymentConfirmation';
 import './App.css';
 
 function App() {
@@ -64,6 +66,8 @@ function App() {
           <Route path="/login" element={<Login setIsLoggedIn={setIsLoggedIn} />} />
           <Route path="/signup" element={<Signup setIsLoggedIn={setIsLoggedIn} />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/booking/:equipmentId" element={<Booking />} />
+          <Route path="/payment-confirmation" element={<PaymentConfirmation />} />
         </Routes>
       </div>
     </Router>
