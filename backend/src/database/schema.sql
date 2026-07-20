@@ -32,6 +32,20 @@ CREATE TABLE equipment (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create payments table
+CREATE TABLE payments (
+  id SERIAL PRIMARY KEY,
+  payment_id VARCHAR(255) UNIQUE NOT NULL,
+  booking_id INTEGER,
+  amount DECIMAL(10, 2) NOT NULL,
+  commission DECIMAL(10, 2) NOT NULL,
+  owner_amount DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(10) DEFAULT 'usd',
+  status VARCHAR(50) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create bookings table
 CREATE TABLE bookings (
   id SERIAL PRIMARY KEY,
@@ -42,9 +56,15 @@ CREATE TABLE bookings (
   total_price DECIMAL(10, 2) NOT NULL,
   status VARCHAR(50) DEFAULT 'pending',
   payment_status VARCHAR(50) DEFAULT 'unpaid',
+  payment_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Add foreign key from bookings to payments after both tables exist
+ALTER TABLE bookings
+  ADD CONSTRAINT fk_bookings_payment_id
+  FOREIGN KEY (payment_id) REFERENCES payments(payment_id);
 
 -- Create reviews table
 CREATE TABLE reviews (
@@ -61,6 +81,9 @@ CREATE TABLE reviews (
 CREATE INDEX idx_equipment_owner_id ON equipment(owner_id);
 CREATE INDEX idx_bookings_renter_id ON bookings(renter_id);
 CREATE INDEX idx_bookings_equipment_id ON bookings(equipment_id);
+CREATE INDEX idx_bookings_payment_id ON bookings(payment_id);
+CREATE INDEX idx_payments_booking_id ON payments(booking_id);
 CREATE INDEX idx_reviews_booking_id ON reviews(booking_id);
 CREATE INDEX idx_equipment_category ON equipment(category);
 CREATE INDEX idx_bookings_status ON bookings(status);
+CREATE INDEX idx_payments_status ON payments(status);
