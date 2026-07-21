@@ -863,3 +863,500 @@ table th {
     padding: 2rem 1.5rem;
   }
 }
+
+/* ============================================================
+   OWNER DASHBOARD SECTION
+   All classes prefixed with .owner-dashboard-* or .equipment-form-*
+   Uses existing CSS variables from :root — does not modify any
+   existing classes.
+   ============================================================ */
+
+/* Page wrapper */
+.owner-dashboard-page {
+  background-color: var(--bg-light);
+  min-height: 100vh;
+  padding: 2rem 1rem 4rem;
+}
+
+.owner-dashboard-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Header */
+.owner-dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.owner-dashboard-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  letter-spacing: -0.5px;
+}
+
+.owner-dashboard-subtitle {
+  font-size: 1rem;
+  color: var(--text-light);
+  margin-top: 0.25rem;
+}
+
+.owner-dashboard-add-btn {
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* Feedback messages */
+.owner-dashboard-success {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+  border-radius: 8px;
+  padding: 0.875rem 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.owner-dashboard-error {
+  background-color: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 0.875rem 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Tabs */
+.owner-dashboard-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 1.5rem;
+}
+
+.owner-dashboard-tab {
+  padding: 0.75rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-light);
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+}
+
+.owner-dashboard-tab:hover {
+  color: var(--primary-color);
+}
+
+.owner-dashboard-tab--active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+/* Content area */
+.owner-dashboard-content {
+  background: white;
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+/* Loading / empty states */
+.owner-dashboard-loading {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.owner-dashboard-empty {
+  padding: 4rem 2rem;
+  text-align: center;
+  color: var(--text-light);
+}
+
+.owner-dashboard-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.owner-dashboard-empty p {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+/* Table */
+.owner-dashboard-table-wrapper {
+  overflow-x: auto;
+}
+
+.owner-dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  font-size: 0.9rem;
+}
+
+.owner-dashboard-table th,
+.owner-dashboard-table td {
+  padding: 0.875rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-dark);
+  vertical-align: middle;
+}
+
+.owner-dashboard-table th {
+  background-color: var(--bg-light);
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-light);
+}
+
+.owner-dashboard-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+/* Thumbnail */
+.owner-dashboard-thumb {
+  width: 56px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.owner-dashboard-thumb-placeholder {
+  width: 56px;
+  height: 40px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.owner-dashboard-item-name {
+  font-weight: 700;
+}
+
+.owner-dashboard-price {
+  font-weight: 700;
+  color: var(--secondary-color);
+}
+
+/* Condition badges */
+.owner-dashboard-condition {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.owner-dashboard-condition--excellent {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.owner-dashboard-condition--good {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.owner-dashboard-condition--fair {
+  background-color: #fef9c3;
+  color: #854d0e;
+}
+
+.owner-dashboard-condition--poor {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+/* Toggle button */
+.owner-dashboard-toggle {
+  padding: 0.35rem 0.85rem;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.owner-dashboard-toggle--active {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.owner-dashboard-toggle--active:hover {
+  background-color: #a7f3d0;
+}
+
+.owner-dashboard-toggle--inactive {
+  background-color: #f3f4f6;
+  color: var(--text-light);
+}
+
+.owner-dashboard-toggle--inactive:hover {
+  background-color: #e5e7eb;
+}
+
+/* Row actions */
+.owner-dashboard-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.owner-dashboard-action-btn {
+  padding: 0.35rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.owner-dashboard-action-btn--edit {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.owner-dashboard-action-btn--edit:hover {
+  background-color: #bfdbfe;
+}
+
+.owner-dashboard-action-btn--history {
+  background-color: #fef9c3;
+  color: #854d0e;
+}
+
+.owner-dashboard-action-btn--history:hover {
+  background-color: #fde68a;
+}
+
+.owner-dashboard-action-btn--delete {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.owner-dashboard-action-btn--delete:hover {
+  background-color: #fecaca;
+}
+
+/* Rental history header */
+.owner-dashboard-rentals-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.owner-dashboard-rentals-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+/* Status badges */
+.owner-dashboard-status {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.owner-dashboard-status--confirmed {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.owner-dashboard-status--pending {
+  background-color: #fef9c3;
+  color: #854d0e;
+}
+
+.owner-dashboard-status--cancelled {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+/* ── Equipment Form Modal ─────────────────────────────────── */
+
+.equipment-form-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 1rem;
+}
+
+.equipment-form-modal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+.equipment-form-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.equipment-form-modal-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+.equipment-form-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: var(--text-light);
+  padding: 0.25rem;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.equipment-form-close-btn:hover {
+  color: var(--text-dark);
+}
+
+.equipment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.equipment-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.equipment-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.equipment-form-group--full {
+  grid-column: 1 / -1;
+}
+
+.equipment-form-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.equipment-form-input {
+  padding: 0.75rem 0.875rem;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: white;
+  color: var(--text-dark);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
+}
+
+.equipment-form-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+}
+
+.equipment-form-input::placeholder {
+  color: var(--text-light);
+}
+
+.equipment-form-textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.equipment-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+/* ── Responsive adjustments for owner dashboard ─────────── */
+
+@media (max-width: 768px) {
+  .owner-dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .owner-dashboard-title {
+    font-size: 1.5rem;
+  }
+
+  .equipment-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .equipment-form-group--full {
+    grid-column: auto;
+  }
+
+  .owner-dashboard-actions {
+    flex-direction: column;
+  }
+
+  .owner-dashboard-table th,
+  .owner-dashboard-table td {
+    padding: 0.625rem 0.75rem;
+  }
+
+  .equipment-form-modal {
+    padding: 1.5rem;
+  }
+}
+/* ============================================================
+   END OWNER DASHBOARD SECTION
+   ============================================================ */

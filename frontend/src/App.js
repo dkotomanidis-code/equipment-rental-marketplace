@@ -5,6 +5,7 @@ import Equipment from './pages/Equipment';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
+import OwnerDashboard from './pages/OwnerDashboard';
 import Booking from './pages/Booking';
 import PaymentConfirmation from './pages/PaymentConfirmation';
 import './App.css';
@@ -43,6 +44,9 @@ function App() {
                     <Link to="/dashboard" className="nav-link">Dashboard</Link>
                   </li>
                   <li className="nav-item">
+                    <Link to="/owner-dashboard" className="nav-link">My Equipment</Link>
+                  </li>
+                  <li className="nav-item">
                     <button onClick={handleLogout} className="nav-link">Logout</button>
                   </li>
                 </>
@@ -66,6 +70,7 @@ function App() {
           <Route path="/login" element={<Login setIsLoggedIn={setIsLoggedIn} />} />
           <Route path="/signup" element={<Signup setIsLoggedIn={setIsLoggedIn} />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/owner-dashboard" element={<OwnerDashboard />} />
           <Route path="/booking/:equipmentId" element={<Booking />} />
           <Route path="/payment-confirmation" element={<PaymentConfirmation />} />
         </Routes>
