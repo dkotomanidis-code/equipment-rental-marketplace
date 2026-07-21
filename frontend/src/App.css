@@ -170,6 +170,133 @@ body {
   margin-right: auto;
 }
 
+/* Hero Search Form */
+.hero-search-form {
+  display: flex;
+  gap: 0.75rem;
+  max-width: 700px;
+  margin: 0 auto 1.25rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hero-search-input {
+  flex: 1;
+  min-width: 220px;
+  padding: 0.875rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  color: var(--text-dark);
+  background-color: white;
+  box-shadow: var(--shadow-md);
+}
+
+.hero-search-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.4);
+}
+
+.hero-category-select {
+  min-width: 160px;
+  padding: 0.875rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  color: var(--text-dark);
+  background-color: white;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+
+.hero-category-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.4);
+}
+
+.hero-search-btn {
+  padding: 0.875rem 1.75rem;
+  white-space: nowrap;
+}
+
+.hero-browse-link {
+  display: inline-block;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-top: 0.25rem;
+  transition: color 0.2s ease;
+}
+
+.hero-browse-link:hover {
+  color: white;
+  text-decoration: underline;
+}
+
+/* Seller CTA Section */
+.seller-cta {
+  background-color: var(--bg-light);
+  padding: 5rem 2rem;
+  text-align: center;
+  border-top: 1px solid var(--border-color);
+}
+
+.seller-cta-content {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.seller-cta-content h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 1rem;
+}
+
+.seller-cta-content p {
+  font-size: 1.1rem;
+  color: var(--text-light);
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+.seller-cta-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
+  padding: 0.875rem 1.75rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-outline:hover {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+/* Highlighted nav link for selling */
+.nav-link-sell {
+  color: var(--secondary-color) !important;
+  font-weight: 600;
+}
+
+.nav-link-sell:hover {
+  color: #ea580c !important;
+}
+
 /* Buttons */
 .btn {
   padding: 0.875rem 1.75rem;
@@ -511,6 +638,26 @@ table th {
 
   .hero-content p {
     font-size: 1rem;
+  }
+
+  .hero-search-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-search-input,
+  .hero-category-select {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .seller-cta-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .seller-cta-buttons {
+    flex-direction: column;
+    align-items: center;
   }
 
   .equipment-grid {

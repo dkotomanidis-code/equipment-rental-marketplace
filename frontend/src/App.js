@@ -11,6 +11,7 @@ import './App.css';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
+  const [language, setLanguage] = useState('en');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -26,6 +27,38 @@ function App() {
     <Router>
       <div className="App">
         <nav className="navbar">
+          <div className="navbar-top">
+            <div className="flag-selector">
+              <button
+                className={`flag-btn ${language === 'en' ? 'active' : ''}`}
+                onClick={() => setLanguage('en')}
+                title="English"
+              >
+                🇺🇸
+              </button>
+              <button
+                className={`flag-btn ${language === 'el' ? 'active' : ''}`}
+                onClick={() => setLanguage('el')}
+                title="Ελληνικά"
+              >
+                🇬🇷
+              </button>
+              <button
+                className={`flag-btn ${language === 'de' ? 'active' : ''}`}
+                onClick={() => setLanguage('de')}
+                title="Deutsch"
+              >
+                🇩🇪
+              </button>
+              <button
+                className={`flag-btn ${language === 'fr' ? 'active' : ''}`}
+                onClick={() => setLanguage('fr')}
+                title="Français"
+              >
+                🇫🇷
+              </button>
+            </div>
+          </div>
           <div className="nav-container">
             <Link to="/" className="nav-logo">
               📦 Equipment Rental
@@ -40,6 +73,9 @@ function App() {
               {isLoggedIn ? (
                 <>
                   <li className="nav-item">
+                    <Link to="/dashboard" className="nav-link nav-link-sell">Sell Equipment</Link>
+                  </li>
+                  <li className="nav-item">
                     <Link to="/dashboard" className="nav-link">Dashboard</Link>
                   </li>
                   <li className="nav-item">
@@ -48,6 +84,9 @@ function App() {
                 </>
               ) : (
                 <>
+                  <li className="nav-item">
+                    <Link to="/signup" className="nav-link nav-link-sell">Become a Seller</Link>
+                  </li>
                   <li className="nav-item">
                     <Link to="/login" className="nav-link">Login</Link>
                   </li>
