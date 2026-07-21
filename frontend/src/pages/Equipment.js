@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 
 function Equipment() {
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+
   const [equipment, setEquipment] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [category, setCategory] = useState('');
+  const [searchTerm, setSearchTerm] = useState(queryParams.get('search') || '');
+  const [category, setCategory] = useState(queryParams.get('category') || '');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
