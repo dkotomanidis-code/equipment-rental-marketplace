@@ -129,12 +129,26 @@ router.post('/', protectedRateLimit, requireAuth, async (req, res) => {
 
       if (paymentId) {
         const [paymentRows] = await connection.execute(
-          'SELECT payment_id, status FROM payments WHERE payment_id = ? LIMIT 1 FOR UPDATE',
+          `
+            SELECT payment_id, status, user_id, equipment_id, rental_start_date, rental_end_date, total_amount
+            FROM payments
+            WHERE payment_id = ?
+            LIMIT 1
+            FOR UPDATE
+          `,
           [paymentId]
         );
         const payment = paymentRows[0];
 
-        if (!payment || payment.status !== 'completed') {
+        if (
+          !payment ||
+          payment.status !== 'completed' ||
+          payment.user_id !== req.user.id ||
+          payment.equipment_id !== Number(equipmentId) ||
+          String(payment.rental_start_date) !== String(startDate) ||
+          String(payment.rental_end_date) !== String(endDate) ||
+          Number(payment.total_amount) !== Number(totalPrice || 0)
+        ) {
           await connection.rollback();
           return res.status(400).json({ error: 'A completed payment is required for this booking' });
         }

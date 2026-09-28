@@ -1,17 +1,25 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const db = require('../db');
+const { requireAuth } = require('../middleware/auth');
 
 const PLATFORM_COMMISSION_RATE = 0.05; // 5%
+const paymentRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // POST /api/payments/create-intent - Create Stripe payment intent
-router.post('/create-intent', async (req, res) => {
+router.post('/create-intent', paymentRateLimit, requireAuth, async (req, res) => {
   try {
-    const { bookingId, amount, currency = 'usd' } = req.body;
+    const { bookingId, equipmentId, startDate, endDate, amount, currency = 'usd' } = req.body;
 
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' });
+    if (!amount || amount <= 0 || !equipmentId || !startDate || !endDate) {
+      return res.status(400).json({ error: 'amount, equipmentId, startDate, and endDate are required' });
     }
 
     let persistedBookingId = null;
@@ -29,6 +37,11 @@ router.post('/create-intent', async (req, res) => {
     const ownerAmountCents = totalAmountCents - commissionCents;
 
     const metadata = {
+      userId: String(req.user.id),
+      equipmentId: String(equipmentId),
+      startDate: String(startDate),
+      endDate: String(endDate),
+      amount: String(amount),
       commission: String(commissionCents),
       ownerAmount: String(ownerAmountCents),
     };
@@ -48,6 +61,10 @@ router.post('/create-intent', async (req, res) => {
         INSERT INTO payments (
           payment_id,
           booking_id,
+          user_id,
+          equipment_id,
+          rental_start_date,
+          rental_end_date,
           subtotal,
           tax_amount,
           total_amount,
@@ -56,9 +73,8 @@ router.post('/create-intent', async (req, res) => {
           currency,
           status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
-          booking_id = VALUES(booking_id),
           subtotal = VALUES(subtotal),
           tax_amount = VALUES(tax_amount),
           total_amount = VALUES(total_amount),
@@ -70,6 +86,10 @@ router.post('/create-intent', async (req, res) => {
       [
         paymentIntent.id,
         persistedBookingId,
+        req.user.id,
+        equipmentId,
+        startDate,
+        endDate,
         totalAmountCents / 100,
         0,
         totalAmountCents / 100,
@@ -93,7 +113,7 @@ router.post('/create-intent', async (req, res) => {
 });
 
 // POST /api/payments/confirm - Confirm payment after Stripe processes it
-router.post('/confirm', async (req, res) => {
+router.post('/confirm', paymentRateLimit, requireAuth, async (req, res) => {
   try {
     const { paymentIntentId } = req.body;
 
@@ -103,12 +123,16 @@ router.post('/confirm', async (req, res) => {
 
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-    await db.query('UPDATE payments SET status = ? WHERE payment_id = ?', [
+    await db.query('UPDATE payments SET status = ? WHERE payment_id = ? AND user_id = ?', [
       paymentIntent.status === 'succeeded' ? 'completed' : paymentIntent.status,
       paymentIntentId,
+      req.user.id,
     ]);
 
-    const paymentRows = await db.query('SELECT * FROM payments WHERE payment_id = ? LIMIT 1', [paymentIntentId]);
+    const paymentRows = await db.query('SELECT * FROM payments WHERE payment_id = ? AND user_id = ? LIMIT 1', [
+      paymentIntentId,
+      req.user.id,
+    ]);
 
     res.json({
       status: paymentIntent.status,

@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS payments (
   id INT AUTO_INCREMENT PRIMARY KEY,
   payment_id VARCHAR(255) UNIQUE NOT NULL,
   booking_id INT NULL,
+  user_id INT NULL,
+  equipment_id INT NULL,
+  rental_start_date DATE NULL,
+  rental_end_date DATE NULL,
   subtotal DECIMAL(10, 2) NOT NULL,
   tax_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
   total_amount DECIMAL(10, 2) NOT NULL,
@@ -68,6 +72,8 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_payments_booking_id (booking_id),
+  KEY idx_payments_user_id (user_id),
+  KEY idx_payments_equipment_id (equipment_id),
   KEY idx_payments_status (status)
 );
 

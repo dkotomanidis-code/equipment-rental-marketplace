@@ -149,7 +149,19 @@ describe('dashboard and favorites routes', () => {
       execute: jest
         .fn()
         .mockResolvedValueOnce([[{ id: 10, owner_id: 99, name: 'Generator' }]])
-        .mockResolvedValueOnce([[{ payment_id: 'pi_123', status: 'completed' }]])
+        .mockResolvedValueOnce([
+          [
+            {
+              payment_id: 'pi_123',
+              status: 'completed',
+              user_id: 7,
+              equipment_id: 10,
+              rental_start_date: '2026-10-10',
+              rental_end_date: '2026-10-12',
+              total_amount: 100,
+            },
+          ],
+        ])
         .mockResolvedValueOnce([[]])
         .mockResolvedValueOnce([{ insertId: 120 }])
         .mockResolvedValueOnce([{ affectedRows: 1 }])
@@ -234,6 +246,55 @@ describe('dashboard and favorites routes', () => {
 
     expect(response.status).toBe(400);
     expect(payload.error).toBe('You cannot book your own equipment');
+    expect(fakeConnection.rollback).toHaveBeenCalled();
+  });
+
+  test('rejects a completed payment that does not belong to the renter', async () => {
+    const fakeConnection = {
+      beginTransaction: jest.fn().mockResolvedValue(undefined),
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn(),
+      execute: jest
+        .fn()
+        .mockResolvedValueOnce([[{ id: 10, owner_id: 99, name: 'Generator' }]])
+        .mockResolvedValueOnce([
+          [
+            {
+              payment_id: 'pi_123',
+              status: 'completed',
+              user_id: 999,
+              equipment_id: 10,
+              rental_start_date: '2026-10-10',
+              rental_end_date: '2026-10-12',
+              total_amount: 100,
+            },
+          ],
+        ]),
+    };
+
+    db.getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(fakeConnection),
+    });
+
+    const response = await fetch(`${baseUrl}/bookings`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        equipmentId: 10,
+        startDate: '2026-10-10',
+        endDate: '2026-10-12',
+        totalPrice: 100,
+        paymentId: 'pi_123',
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toBe('A completed payment is required for this booking');
     expect(fakeConnection.rollback).toHaveBeenCalled();
   });
 });

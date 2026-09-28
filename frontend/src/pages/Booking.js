@@ -30,10 +30,21 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess }) 
     try {
       // Step 1: Create payment intent
       const token = localStorage.getItem('token');
-      const intentRes = await axios.post(`${apiBaseUrl}/payments/create-intent`, {
-        amount: totalPrice,
-        currency: 'usd',
-      });
+      const intentRes = await axios.post(
+        `${apiBaseUrl}/payments/create-intent`,
+        {
+          amount: totalPrice,
+          currency: 'usd',
+          equipmentId: equipment.id,
+          startDate,
+          endDate,
+        },
+        {
+          headers: {
+            Authorization: 'Bearer ' + token,
+          },
+        }
+      );
       const { clientSecret } = intentRes.data;
 
       // Step 2: Confirm card payment with Stripe
@@ -50,9 +61,17 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess }) 
       }
 
       // Step 3: Confirm payment on the backend
-      const confirmRes = await axios.post(`${apiBaseUrl}/payments/confirm`, {
-        paymentIntentId: paymentIntent.id,
-      });
+      const confirmRes = await axios.post(
+        `${apiBaseUrl}/payments/confirm`,
+        {
+          paymentIntentId: paymentIntent.id,
+        },
+        {
+          headers: {
+            Authorization: 'Bearer ' + token,
+          },
+        }
+      );
 
       if (!['completed', 'succeeded'].includes(confirmRes.data.payment?.status || confirmRes.data.status)) {
         setError('Payment is not complete yet. Please try again.');
