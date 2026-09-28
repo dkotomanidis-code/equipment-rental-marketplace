@@ -175,6 +175,7 @@ function Dashboard() {
             <SummaryCard title="Total Rentals" value={dashboard.summary.totalRentals} />
             <SummaryCard title="Total Spending" value={formatCurrency(dashboard.summary.totalSpending)} />
             <SummaryCard title="Current Bookings" value={dashboard.summary.currentBookings} />
+            <SummaryCard title="Upcoming Bookings" value={dashboard.summary.upcomingBookings} />
             <SummaryCard title="Saved Favorites" value={dashboard.summary.savedFavorites} />
           </>
         )}

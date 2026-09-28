@@ -215,6 +215,14 @@ router.post('/', protectedRateLimit, requireAuth, async (req, res) => {
               days_rented
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              amount = VALUES(amount),
+              commission = VALUES(commission),
+              net_amount = VALUES(net_amount),
+              status = VALUES(status),
+              rental_start_date = VALUES(rental_start_date),
+              rental_end_date = VALUES(rental_end_date),
+              days_rented = VALUES(days_rented)
           `,
           [
             equipment.owner_id,

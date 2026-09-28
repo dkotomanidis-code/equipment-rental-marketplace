@@ -462,5 +462,6 @@ describe('dashboard and favorites routes', () => {
       expect.stringContaining('INSERT INTO user_earnings'),
       [99, 321, 22, 80, 4, 76, 'pending', '2026-10-10', '2026-10-10', 1]
     );
+    expect(fakeConnection.execute.mock.calls[4][0]).toContain('ON DUPLICATE KEY UPDATE');
   });
 });

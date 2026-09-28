@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS user_earnings (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_user_earnings_owner_id (owner_id),
   KEY idx_user_earnings_booking_id (booking_id),
+  UNIQUE KEY unique_user_earnings_booking (booking_id),
   FOREIGN KEY (owner_id) REFERENCES users(id),
   FOREIGN KEY (booking_id) REFERENCES bookings(id),
   FOREIGN KEY (equipment_id) REFERENCES equipment(id)
