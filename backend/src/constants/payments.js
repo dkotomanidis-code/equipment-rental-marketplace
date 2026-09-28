@@ -1,0 +1,5 @@
+const PLATFORM_COMMISSION_RATE = 0.05;
+
+module.exports = {
+  PLATFORM_COMMISSION_RATE,
+};

@@ -7,6 +7,7 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 const stripePromise = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY)
   : null;
+const apiBaseUrl = process.env.REACT_APP_API_URL || '/api';
 
 const PLATFORM_COMMISSION_RATE = 0.05;
 
@@ -28,11 +29,23 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess }) 
 
     try {
       // Step 1: Create payment intent
-      const intentRes = await axios.post(`${process.env.REACT_APP_API_URL}/payments/create-intent`, {
-        amount: totalPrice,
-        currency: 'usd',
-      });
-      const { clientSecret, paymentId } = intentRes.data;
+      const token = localStorage.getItem('token');
+      const intentRes = await axios.post(
+        `${apiBaseUrl}/payments/create-intent`,
+        {
+          amount: totalPrice,
+          currency: 'usd',
+          equipmentId: equipment.id,
+          startDate,
+          endDate,
+        },
+        {
+          headers: {
+            Authorization: 'Bearer ' + token,
+          },
+        }
+      );
+      const { clientSecret } = intentRes.data;
 
       // Step 2: Confirm card payment with Stripe
       const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
@@ -48,18 +61,40 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess }) 
       }
 
       // Step 3: Confirm payment on the backend
-      await axios.post(`${process.env.REACT_APP_API_URL}/payments/confirm`, {
-        paymentIntentId: paymentIntent.id,
-      });
+      const confirmRes = await axios.post(
+        `${apiBaseUrl}/payments/confirm`,
+        {
+          paymentIntentId: paymentIntent.id,
+        },
+        {
+          headers: {
+            Authorization: 'Bearer ' + token,
+          },
+        }
+      );
+
+      if (!['completed', 'succeeded'].includes(confirmRes.data.payment?.status || confirmRes.data.status)) {
+        setError('Payment is not complete yet. Please try again.');
+        setLoading(false);
+        return;
+      }
 
       // Step 4: Create booking record only after payment is confirmed
-      const bookingRes = await axios.post(`${process.env.REACT_APP_API_URL}/bookings`, {
-        equipmentId: equipment.id,
-        startDate,
-        endDate,
-        totalPrice,
-        paymentId: paymentIntent.id,
-      });
+      const bookingRes = await axios.post(
+        `${apiBaseUrl}/bookings`,
+        {
+          equipmentId: equipment.id,
+          startDate,
+          endDate,
+          totalPrice,
+          paymentId: paymentIntent.id,
+        },
+        {
+          headers: {
+            Authorization: 'Bearer ' + token,
+          },
+        }
+      );
 
       onSuccess({ booking: bookingRes.data, paymentId: paymentIntent.id });
     } catch (err) {
@@ -135,7 +170,7 @@ function Booking() {
   useEffect(() => {
     const fetchEquipment = async () => {
       try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/equipment/${equipmentId}`);
+        const response = await axios.get(`${apiBaseUrl}/equipment/${equipmentId}`);
         setEquipment(response.data);
       } catch (err) {
         setError('Equipment not found.');
