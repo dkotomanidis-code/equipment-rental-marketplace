@@ -12,6 +12,23 @@ const protectedRateLimit = rateLimit({
   legacyHeaders: false,
 });
 
+const BOOKING_DETAILS_QUERY = `
+  SELECT
+    b.*,
+    e.owner_id,
+    e.name AS equipment_name,
+    e.image_url AS equipment_image_url,
+    e.location,
+    owner.username AS owner_username,
+    owner.first_name AS owner_first_name,
+    owner.last_name AS owner_last_name
+  FROM bookings b
+  JOIN equipment e ON e.id = b.equipment_id
+  LEFT JOIN users owner ON owner.id = e.owner_id
+  WHERE b.id = ?
+  LIMIT 1
+`;
+
 function getEarningsStatus(booking) {
   if (['cancelled', 'rejected'].includes(booking.status)) {
     return booking.status;
@@ -62,21 +79,7 @@ router.get('/:id', protectedRateLimit, requireAuth, async (req, res) => {
   try {
     const rows = await db.query(
       `
-        SELECT
-          b.*,
-          e.owner_id,
-          e.name AS equipment_name,
-          e.image_url AS equipment_image_url,
-          e.location,
-          owner.username AS owner_username,
-          owner.first_name AS owner_first_name,
-          owner.last_name AS owner_last_name
-        FROM bookings b
-        JOIN equipment e ON e.id = b.equipment_id
-        LEFT JOIN users owner ON owner.id = e.owner_id
-        WHERE b.id = ?
-          AND b.renter_id = ?
-        LIMIT 1
+        ${BOOKING_DETAILS_QUERY.trim().replace('WHERE b.id = ?', 'WHERE b.id = ? AND b.renter_id = ?')}
       `,
       [req.params.id, req.user.id]
     );
@@ -100,112 +103,129 @@ router.post('/', protectedRateLimit, requireAuth, async (req, res) => {
   }
 
   try {
-    const [equipment] = await db.query(
-      'SELECT id, owner_id, name FROM equipment WHERE id = ? AND availability_status = true LIMIT 1',
-      [equipmentId]
-    );
+    const connection = await db.getPool().getConnection();
 
-    if (!equipment) {
-      return res.status(404).json({ error: 'Equipment not found' });
-    }
+    try {
+      await connection.beginTransaction();
 
-    if (equipment.owner_id === req.user.id) {
-      return res.status(400).json({ error: 'You cannot book your own equipment' });
-    }
+      const [equipmentRows] = await connection.execute(
+        'SELECT id, owner_id, name FROM equipment WHERE id = ? AND availability_status = true LIMIT 1 FOR UPDATE',
+        [equipmentId]
+      );
+      const equipment = equipmentRows[0];
 
-    const overlappingBookings = await db.query(
-      `
-        SELECT id
-        FROM bookings
-        WHERE equipment_id = ?
-          AND status NOT IN ('cancelled', 'rejected')
-          AND start_date <= ?
-          AND end_date >= ?
-        LIMIT 1
-      `,
-      [equipmentId, endDate, startDate]
-    );
+      if (!equipment) {
+        await connection.rollback();
+        return res.status(404).json({ error: 'Equipment not found' });
+      }
 
-    if (overlappingBookings.length > 0) {
-      return res.status(409).json({ error: 'Equipment is already booked for those dates' });
-    }
+      if (equipment.owner_id === req.user.id) {
+        await connection.rollback();
+        return res.status(400).json({ error: 'You cannot book your own equipment' });
+      }
 
-    const insertResult = await db.query(
-      `
-        INSERT INTO bookings (renter_id, equipment_id, start_date, end_date, total_price, status, payment_status, payment_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        req.user.id,
-        equipmentId,
-        startDate,
-        endDate,
-        totalPrice || 0,
-        paymentId ? 'confirmed' : 'pending',
-        paymentId ? 'paid' : 'unpaid',
-        paymentId || null,
-      ]
-    );
+      let bookingStatus = 'pending';
+      let paymentStatus = 'unpaid';
 
-    await db.query('UPDATE users SET is_renter = true WHERE id = ?', [req.user.id]);
+      if (paymentId) {
+        const [paymentRows] = await connection.execute(
+          'SELECT payment_id, status FROM payments WHERE payment_id = ? LIMIT 1 FOR UPDATE',
+          [paymentId]
+        );
+        const payment = paymentRows[0];
 
-    if (equipment.owner_id && Number(totalPrice || 0) > 0) {
-      const amount = Number(totalPrice);
-      const commission = Number((amount * 0.05).toFixed(2));
-      const netAmount = Number((amount - commission).toFixed(2));
-      const daysRented = Math.max(
-        1,
-        Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24))
+        if (!payment || payment.status !== 'completed') {
+          await connection.rollback();
+          return res.status(400).json({ error: 'A completed payment is required for this booking' });
+        }
+
+        bookingStatus = 'confirmed';
+        paymentStatus = 'paid';
+      }
+
+      const [overlapRows] = await connection.execute(
+        `
+          SELECT id
+          FROM bookings
+          WHERE equipment_id = ?
+            AND status NOT IN ('cancelled', 'rejected')
+            AND start_date <= ?
+            AND end_date >= ?
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [equipmentId, endDate, startDate]
       );
 
-      await db.query(
+      if (overlapRows.length > 0) {
+        await connection.rollback();
+        return res.status(409).json({ error: 'Equipment is already booked for those dates' });
+      }
+
+      const [insertResult] = await connection.execute(
         `
-          INSERT INTO user_earnings (
-            owner_id,
-            booking_id,
-            equipment_id,
+          INSERT INTO bookings (renter_id, equipment_id, start_date, end_date, total_price, status, payment_status, payment_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [req.user.id, equipmentId, startDate, endDate, totalPrice || 0, bookingStatus, paymentStatus, paymentId || null]
+      );
+
+      await connection.execute('UPDATE users SET is_renter = true WHERE id = ?', [req.user.id]);
+
+      if (paymentId) {
+        await connection.execute('UPDATE payments SET booking_id = ? WHERE payment_id = ?', [insertResult.insertId, paymentId]);
+      }
+
+      if (equipment.owner_id && Number(totalPrice || 0) > 0) {
+        const amount = Number(totalPrice);
+        const commission = Number((amount * 0.05).toFixed(2));
+        const netAmount = Number((amount - commission).toFixed(2));
+        const daysRented = Math.max(
+          1,
+          Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24))
+        );
+
+        await connection.execute(
+          `
+            INSERT INTO user_earnings (
+              owner_id,
+              booking_id,
+              equipment_id,
+              amount,
+              commission,
+              net_amount,
+              status,
+              rental_start_date,
+              rental_end_date,
+              days_rented
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            equipment.owner_id,
+            insertResult.insertId,
+            equipmentId,
             amount,
             commission,
-            net_amount,
-            status,
-            rental_start_date,
-            rental_end_date,
-            days_rented
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-        [
-          equipment.owner_id,
-          insertResult.insertId,
-          equipmentId,
-          amount,
-          commission,
-          netAmount,
-          paymentId ? 'completed' : 'pending',
-          startDate,
-          endDate,
-          daysRented,
-        ]
-      );
+            netAmount,
+            paymentStatus === 'paid' ? 'completed' : 'pending',
+            startDate,
+            endDate,
+            daysRented,
+          ]
+        );
+      }
+
+      await connection.commit();
+
+      const rows = await db.query(BOOKING_DETAILS_QUERY, [insertResult.insertId]);
+      return res.status(201).json(serializeBooking(rows[0]));
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
-
-    const rows = await db.query(
-      `
-        SELECT
-          b.*,
-          e.owner_id,
-          e.name AS equipment_name,
-          e.image_url AS equipment_image_url,
-          e.location
-        FROM bookings b
-        JOIN equipment e ON e.id = b.equipment_id
-        WHERE b.id = ?
-        LIMIT 1
-      `,
-      [insertResult.insertId]
-    );
-
-    return res.status(201).json(serializeBooking(rows[0]));
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -253,7 +273,7 @@ router.put('/:id', protectedRateLimit, requireAuth, async (req, res) => {
 
     await db.query(`UPDATE bookings SET ${fields.join(', ')} WHERE id = ?`, params);
 
-    const rows = await db.query('SELECT * FROM bookings WHERE id = ? LIMIT 1', [req.params.id]);
+    const rows = await db.query(BOOKING_DETAILS_QUERY, [req.params.id]);
     const booking = rows[0];
 
     if (!booking) {

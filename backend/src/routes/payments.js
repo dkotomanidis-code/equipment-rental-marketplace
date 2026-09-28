@@ -57,6 +57,15 @@ router.post('/create-intent', async (req, res) => {
           status
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          booking_id = VALUES(booking_id),
+          subtotal = VALUES(subtotal),
+          tax_amount = VALUES(tax_amount),
+          total_amount = VALUES(total_amount),
+          commission = VALUES(commission),
+          owner_amount = VALUES(owner_amount),
+          currency = VALUES(currency),
+          status = VALUES(status)
       `,
       [
         paymentIntent.id,

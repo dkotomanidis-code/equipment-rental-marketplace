@@ -18,6 +18,7 @@ async function listFavoritesForUser(userId) {
         e.image_url,
         e.availability_status,
         e.created_at AS equipment_created_at,
+        e.updated_at AS equipment_updated_at,
         owner.username AS owner_username,
         owner.first_name AS owner_first_name,
         owner.last_name AS owner_last_name

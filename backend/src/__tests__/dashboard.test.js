@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 
 jest.mock('../db', () => ({
   query: jest.fn(),
+  getPool: jest.fn(),
 }));
 
 const app = require('../app');
@@ -28,6 +29,7 @@ describe('dashboard and favorites routes', () => {
 
   beforeEach(() => {
     db.query.mockReset();
+    db.getPool.mockReset();
   });
 
   test('rejects unauthenticated dashboard requests', async () => {
@@ -139,13 +141,26 @@ describe('dashboard and favorites routes', () => {
   });
 
   test('creates a paid booking and related earnings for another owner equipment item', async () => {
-    db.query
-      .mockResolvedValueOnce([{ id: 10, owner_id: 99, name: 'Generator' }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce({ insertId: 120 })
-      .mockResolvedValueOnce({ affectedRows: 1 })
-      .mockResolvedValueOnce({ insertId: 220 })
-      .mockResolvedValueOnce([
+    const fakeConnection = {
+      beginTransaction: jest.fn().mockResolvedValue(undefined),
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn(),
+      execute: jest
+        .fn()
+        .mockResolvedValueOnce([[{ id: 10, owner_id: 99, name: 'Generator' }]])
+        .mockResolvedValueOnce([[{ payment_id: 'pi_123', status: 'completed' }]])
+        .mockResolvedValueOnce([[]])
+        .mockResolvedValueOnce([{ insertId: 120 }])
+        .mockResolvedValueOnce([{ affectedRows: 1 }])
+        .mockResolvedValueOnce([{ affectedRows: 1 }])
+        .mockResolvedValueOnce([{ insertId: 220 }]),
+    };
+
+    db.getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(fakeConnection),
+    });
+    db.query.mockResolvedValueOnce([
         {
           id: 120,
           renter_id: 7,
@@ -182,15 +197,25 @@ describe('dashboard and favorites routes', () => {
     expect(payload.paymentStatus).toBe('paid');
     expect(payload.totalPrice).toBe(100);
 
-    expect(db.query).toHaveBeenNthCalledWith(
-      5,
+    expect(fakeConnection.execute).toHaveBeenNthCalledWith(
+      7,
       expect.stringContaining('INSERT INTO user_earnings'),
       [99, 120, 10, 100, 5, 95, 'completed', '2026-10-10', '2026-10-12', 2]
     );
   });
 
   test('rejects booking your own equipment', async () => {
-    db.query.mockResolvedValueOnce([{ id: 10, owner_id: 7, name: 'Generator' }]);
+    const fakeConnection = {
+      beginTransaction: jest.fn().mockResolvedValue(undefined),
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn(),
+      execute: jest.fn().mockResolvedValueOnce([[{ id: 10, owner_id: 7, name: 'Generator' }]]),
+    };
+
+    db.getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(fakeConnection),
+    });
 
     const response = await fetch(`${baseUrl}/bookings`, {
       method: 'POST',
@@ -209,5 +234,6 @@ describe('dashboard and favorites routes', () => {
 
     expect(response.status).toBe(400);
     expect(payload.error).toBe('You cannot book your own equipment');
+    expect(fakeConnection.rollback).toHaveBeenCalled();
   });
 });

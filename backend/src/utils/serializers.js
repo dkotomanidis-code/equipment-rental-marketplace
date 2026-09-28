@@ -115,7 +115,11 @@ function serializeFavorite(row) {
     userId: firstDefined(row.userId, row.user_id, null),
     equipmentId: firstDefined(row.equipmentId, row.equipment_id, null),
     createdAt: firstDefined(row.createdAt, row.created_at, null),
-    equipment: serializeEquipment(row),
+    equipment: serializeEquipment({
+      ...row,
+      created_at: firstDefined(row.equipment_created_at, row.created_at, null),
+      updated_at: firstDefined(row.equipment_updated_at, row.updated_at, null),
+    }),
   };
 }
 

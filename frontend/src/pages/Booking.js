@@ -50,9 +50,15 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess }) 
       }
 
       // Step 3: Confirm payment on the backend
-      await axios.post(`${apiBaseUrl}/payments/confirm`, {
+      const confirmRes = await axios.post(`${apiBaseUrl}/payments/confirm`, {
         paymentIntentId: paymentIntent.id,
       });
+
+      if (!['completed', 'succeeded'].includes(confirmRes.data.payment?.status || confirmRes.data.status)) {
+        setError('Payment is not complete yet. Please try again.');
+        setLoading(false);
+        return;
+      }
 
       // Step 4: Create booking record only after payment is confirmed
       const bookingRes = await axios.post(
