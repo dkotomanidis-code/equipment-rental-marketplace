@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
-// Mock payment database
-const payments = [];
+const db = require('../db');
 
 const PLATFORM_COMMISSION_RATE = 0.05; // 5%
 
@@ -35,18 +33,33 @@ router.post('/create-intent', async (req, res) => {
       metadata,
     });
 
-    // Store payment record
-    const payment = {
-      paymentId: paymentIntent.id,
-      bookingId: bookingId || null,
-      amount: totalAmountCents / 100,
-      commission: commissionCents / 100,
-      ownerAmount: ownerAmountCents / 100,
-      currency,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-    payments.push(payment);
+    await db.query(
+      `
+        INSERT INTO payments (
+          payment_id,
+          booking_id,
+          subtotal,
+          tax_amount,
+          total_amount,
+          commission,
+          owner_amount,
+          currency,
+          status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        paymentIntent.id,
+        bookingId || null,
+        totalAmountCents / 100,
+        0,
+        totalAmountCents / 100,
+        commissionCents / 100,
+        ownerAmountCents / 100,
+        currency,
+        'pending',
+      ]
+    );
 
     res.json({
       clientSecret: paymentIntent.client_secret,
@@ -71,16 +84,17 @@ router.post('/confirm', async (req, res) => {
 
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-    const payment = payments.find((p) => p.paymentId === paymentIntentId);
-    if (payment) {
-      payment.status = paymentIntent.status === 'succeeded' ? 'completed' : paymentIntent.status;
-      payment.updatedAt = new Date();
-    }
+    await db.query('UPDATE payments SET status = ? WHERE payment_id = ?', [
+      paymentIntent.status === 'succeeded' ? 'completed' : paymentIntent.status,
+      paymentIntentId,
+    ]);
+
+    const paymentRows = await db.query('SELECT * FROM payments WHERE payment_id = ? LIMIT 1', [paymentIntentId]);
 
     res.json({
       status: paymentIntent.status,
       paymentId: paymentIntentId,
-      payment: payment || null,
+      payment: paymentRows[0] || null,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -101,11 +115,7 @@ router.post('/refund', async (req, res) => {
       reason,
     });
 
-    const payment = payments.find((p) => p.paymentId === paymentIntentId);
-    if (payment) {
-      payment.status = 'refunded';
-      payment.updatedAt = new Date();
-    }
+    await db.query('UPDATE payments SET status = ? WHERE payment_id = ?', ['refunded', paymentIntentId]);
 
     res.json({
       refundId: refund.id,
@@ -118,12 +128,16 @@ router.post('/refund', async (req, res) => {
 });
 
 // GET /api/payments/:paymentId - Get payment details
-router.get('/:paymentId', (req, res) => {
-  const payment = payments.find((p) => p.paymentId === req.params.paymentId);
-  if (!payment) {
-    return res.status(404).json({ error: 'Payment not found' });
+router.get('/:paymentId', async (req, res) => {
+  try {
+    const rows = await db.query('SELECT * FROM payments WHERE payment_id = ? LIMIT 1', [req.params.paymentId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+    return res.json(rows[0]);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
-  res.json(payment);
 });
 
 module.exports = router;

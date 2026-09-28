@@ -1,6 +1,5 @@
--- Create users table
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(255) UNIQUE NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
@@ -11,46 +10,71 @@ CREATE TABLE users (
   bio TEXT,
   is_renter BOOLEAN DEFAULT true,
   is_owner BOOLEAN DEFAULT false,
+  verification_status VARCHAR(50) DEFAULT 'unverified',
+  id_verified BOOLEAN DEFAULT false,
+  email_verified BOOLEAN DEFAULT false,
+  phone_verified BOOLEAN DEFAULT false,
+  id_document_url VARCHAR(255),
+  verification_date TIMESTAMP NULL,
+  trust_score INT DEFAULT 0,
+  total_rentals INT DEFAULT 0,
+  total_earnings DECIMAL(10, 2) DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Create equipment table
-CREATE TABLE equipment (
-  id SERIAL PRIMARY KEY,
-  owner_id INTEGER NOT NULL REFERENCES users(id),
+CREATE TABLE IF NOT EXISTS equipment (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  owner_id INT NOT NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   category VARCHAR(100),
-  price_per_day DECIMAL(10, 2) NOT NULL,
+  price_per_day DECIMAL(10, 2),
+  min_price_per_day DECIMAL(10, 2),
+  max_price_per_day DECIMAL(10, 2),
+  price DECIMAL(10, 2),
+  min_price DECIMAL(10, 2),
+  max_price DECIMAL(10, 2),
+  for_sale BOOLEAN DEFAULT false,
   location VARCHAR(255),
   latitude DECIMAL(10, 8),
   longitude DECIMAL(11, 8),
   image_url VARCHAR(255),
   availability_status BOOLEAN DEFAULT true,
+  year INT,
+  model VARCHAR(255),
+  manufacturer VARCHAR(255),
+  `condition` VARCHAR(50),
+  features TEXT,
+  comments TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_equipment_owner_id (owner_id),
+  KEY idx_equipment_category (category),
+  FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
--- Create payments table
-CREATE TABLE payments (
-  id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
   payment_id VARCHAR(255) UNIQUE NOT NULL,
-  booking_id INTEGER,
-  amount DECIMAL(10, 2) NOT NULL,
+  booking_id INT NULL,
+  subtotal DECIMAL(10, 2) NOT NULL,
+  tax_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  total_amount DECIMAL(10, 2) NOT NULL,
   commission DECIMAL(10, 2) NOT NULL,
   owner_amount DECIMAL(10, 2) NOT NULL,
   currency VARCHAR(10) DEFAULT 'usd',
   status VARCHAR(50) DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_payments_booking_id (booking_id),
+  KEY idx_payments_status (status)
 );
 
--- Create bookings table
-CREATE TABLE bookings (
-  id SERIAL PRIMARY KEY,
-  renter_id INTEGER NOT NULL REFERENCES users(id),
-  equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+CREATE TABLE IF NOT EXISTS bookings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  renter_id INT NOT NULL,
+  equipment_id INT NOT NULL,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   total_price DECIMAL(10, 2) NOT NULL,
@@ -58,32 +82,64 @@ CREATE TABLE bookings (
   payment_status VARCHAR(50) DEFAULT 'unpaid',
   payment_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_bookings_renter_id (renter_id),
+  KEY idx_bookings_equipment_id (equipment_id),
+  KEY idx_bookings_payment_id (payment_id),
+  KEY idx_bookings_status (status),
+  FOREIGN KEY (renter_id) REFERENCES users(id),
+  FOREIGN KEY (equipment_id) REFERENCES equipment(id),
+  CONSTRAINT fk_bookings_payment_id FOREIGN KEY (payment_id) REFERENCES payments(payment_id)
 );
 
--- Add foreign key from bookings to payments after both tables exist
-ALTER TABLE bookings
-  ADD CONSTRAINT fk_bookings_payment_id
-  FOREIGN KEY (payment_id) REFERENCES payments(payment_id);
-
--- Create reviews table
-CREATE TABLE reviews (
-  id SERIAL PRIMARY KEY,
-  booking_id INTEGER NOT NULL REFERENCES bookings(id),
-  reviewer_id INTEGER NOT NULL REFERENCES users(id),
-  rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+CREATE TABLE IF NOT EXISTS reviews (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT NOT NULL,
+  reviewer_id INT NOT NULL,
+  reviewed_user_id INT NULL,
+  equipment_id INT NOT NULL,
+  rating INT NOT NULL,
+  title VARCHAR(255),
   comment TEXT,
+  review_type VARCHAR(50),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_reviews_booking_id (booking_id),
+  FOREIGN KEY (booking_id) REFERENCES bookings(id),
+  FOREIGN KEY (reviewer_id) REFERENCES users(id),
+  FOREIGN KEY (equipment_id) REFERENCES equipment(id),
+  CONSTRAINT chk_reviews_rating CHECK (rating >= 1 AND rating <= 5)
 );
 
--- Create indexes for better performance
-CREATE INDEX idx_equipment_owner_id ON equipment(owner_id);
-CREATE INDEX idx_bookings_renter_id ON bookings(renter_id);
-CREATE INDEX idx_bookings_equipment_id ON bookings(equipment_id);
-CREATE INDEX idx_bookings_payment_id ON bookings(payment_id);
-CREATE INDEX idx_payments_booking_id ON payments(booking_id);
-CREATE INDEX idx_reviews_booking_id ON reviews(booking_id);
-CREATE INDEX idx_equipment_category ON equipment(category);
-CREATE INDEX idx_bookings_status ON bookings(status);
-CREATE INDEX idx_payments_status ON payments(status);
+CREATE TABLE IF NOT EXISTS user_favorites (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  equipment_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_user_favorites_user_id (user_id),
+  KEY idx_user_favorites_equipment_id (equipment_id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (equipment_id) REFERENCES equipment(id),
+  UNIQUE KEY unique_favorite (user_id, equipment_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_earnings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  owner_id INT NOT NULL,
+  booking_id INT NOT NULL,
+  equipment_id INT NOT NULL,
+  amount DECIMAL(10, 2) NOT NULL,
+  commission DECIMAL(10, 2) DEFAULT 0,
+  net_amount DECIMAL(10, 2) NOT NULL,
+  status VARCHAR(50) DEFAULT 'completed',
+  rental_start_date DATE,
+  rental_end_date DATE,
+  days_rented INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_user_earnings_owner_id (owner_id),
+  KEY idx_user_earnings_booking_id (booking_id),
+  FOREIGN KEY (owner_id) REFERENCES users(id),
+  FOREIGN KEY (booking_id) REFERENCES bookings(id),
+  FOREIGN KEY (equipment_id) REFERENCES equipment(id)
+);

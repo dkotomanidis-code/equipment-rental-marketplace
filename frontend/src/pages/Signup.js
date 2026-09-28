@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
+const apiBaseUrl = process.env.REACT_APP_API_URL || '/api';
+
 function Signup({ setIsLoggedIn }) {
   const [formData, setFormData] = useState({
     username: '',
@@ -21,7 +23,7 @@ function Signup({ setIsLoggedIn }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/auth/signup`, formData);
+      const response = await axios.post(`${apiBaseUrl}/auth/signup`, formData);
       localStorage.setItem('token', response.data.token);
       setIsLoggedIn(true);
       navigate('/dashboard');

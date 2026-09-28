@@ -7,7 +7,7 @@ Follow these steps to run the equipment rental marketplace on your computer.
 Make sure you have installed:
 - **Node.js** (download from https://nodejs.org/) - Choose LTS version
 - **Git** (download from https://git-scm.com/)
-- **PostgreSQL** (download from https://www.postgresql.org/download/) - OR use the in-memory option below
+- **MySQL** (download from https://dev.mysql.com/downloads/mysql/)
 
 ## Step 2: Clone the Repository
 
@@ -20,14 +20,13 @@ cd equipment-rental-marketplace
 
 ## Step 3: Setup Backend
 
-### Option A: With PostgreSQL (Recommended)
+### MySQL Setup (Recommended)
 
-1. **Install PostgreSQL** if you haven't already
+1. **Install MySQL** if you haven't already
 2. **Create a database:**
    ```bash
-   createdb equipment_rental_db
+   mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS equipment_rental;"
    ```
-   (Or use pgAdmin GUI to create the database)
 
 3. **Navigate to backend:**
    ```bash
@@ -45,9 +44,9 @@ cd equipment-rental-marketplace
    PORT=5000
    NODE_ENV=development
    DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=equipment_rental_db
-   DB_USER=postgres
+   DB_PORT=3306
+   DB_NAME=equipment_rental
+   DB_USER=root
    DB_PASSWORD=your_password
    JWT_SECRET=your_super_secret_jwt_key_12345
    JWT_EXPIRE=7d
@@ -55,11 +54,11 @@ cd equipment-rental-marketplace
    STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_key
    ```
 
-   Replace `your_password` with your PostgreSQL password!
+   Replace `your_password` with your MySQL password.
 
 6. **Setup database schema:**
    ```bash
-   psql -U postgres -d equipment_rental_db -f src/database/schema.sql
+   npm run db:setup
    ```
 
 7. **Start the backend:**
@@ -68,27 +67,6 @@ cd equipment-rental-marketplace
    ```
 
    You should see: `Server running on port 5000` ✅
-
-### Option B: Without PostgreSQL (Quick Test)
-
-The current code uses mock data (in-memory), so you can test without PostgreSQL!
-
-1. **Navigate to backend:**
-   ```bash
-   cd backend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Create `.env` file** (same as above, but DB connection won't be used)
-
-4. **Start the backend:**
-   ```bash
-   npm start
-   ```
 
 ## Step 4: Setup Frontend (New Terminal/Tab)
 
@@ -125,6 +103,10 @@ The app will open automatically at **http://localhost:3000** 🎉
 3. Create an account
 4. Browse equipment
 5. Try to book something
+6. Open `/dashboard`:
+   - renters should see rental totals, current/upcoming bookings, and favorites
+   - owners should see earnings, active rentals, upcoming bookings, and listing totals
+7. Save/remove favorites from the equipment page and confirm they update on the dashboard
 
 ## Troubleshooting
 
@@ -150,10 +132,10 @@ rm -rf node_modules
 npm install
 ```
 
-### PostgreSQL connection error
-- Make sure PostgreSQL is running
+### MySQL connection error
+- Make sure MySQL is running
 - Check your password in `.env` file
-- Try: `psql -U postgres` to test connection
+- Try: `mysql -u root -p equipment_rental` to test connection
 
 ## Next Steps
 

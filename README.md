@@ -15,7 +15,7 @@ A full-stack web application where users can rent and list equipment.
 
 ### Backend
 - Node.js + Express.js
-- PostgreSQL
+- MySQL
 - JWT authentication
 
 ### Frontend
@@ -27,7 +27,7 @@ A full-stack web application where users can rent and list equipment.
 
 ### Prerequisites
 - Node.js (v14+)
-- PostgreSQL
+- MySQL
 - npm or yarn
 
 ### Installation
@@ -94,8 +94,13 @@ equipment-rental-marketplace/
 └── README.md
 ```
 
+## Step 7 Dashboard & Favorites
+- `GET /api/dashboard` returns role-aware owner/renter dashboard data for the authenticated user.
+- `GET /api/favorites`, `POST /api/favorites`, and `DELETE /api/favorites/:equipmentId` manage saved favorites via MySQL.
+- Run `npm run db:setup` in `/backend` to create/update the MySQL schema for local Step 7 testing.
+
 ## API Documentation
-See `backend/API.md` for detailed API endpoints
+See the backend route files for the current API endpoints.
 
 ## Deployment
 See `DEPLOYMENT.md` for production deployment guide
