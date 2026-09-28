@@ -74,7 +74,9 @@ CREATE TABLE IF NOT EXISTS payments (
   KEY idx_payments_booking_id (booking_id),
   KEY idx_payments_user_id (user_id),
   KEY idx_payments_equipment_id (equipment_id),
-  KEY idx_payments_status (status)
+  KEY idx_payments_status (status),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (equipment_id) REFERENCES equipment(id)
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
@@ -149,3 +151,7 @@ CREATE TABLE IF NOT EXISTS user_earnings (
   FOREIGN KEY (booking_id) REFERENCES bookings(id),
   FOREIGN KEY (equipment_id) REFERENCES equipment(id)
 );
+
+ALTER TABLE payments
+  ADD CONSTRAINT fk_payments_booking_id
+  FOREIGN KEY (booking_id) REFERENCES bookings(id);

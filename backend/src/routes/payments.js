@@ -125,7 +125,27 @@ router.post('/confirm', paymentRateLimit, requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Payment intent ID required' });
     }
 
+    const paymentRows = await db.query('SELECT * FROM payments WHERE payment_id = ? AND user_id = ? LIMIT 1', [
+      paymentIntentId,
+      req.user.id,
+    ]);
+
+    if (paymentRows.length === 0) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    const payment = paymentRows[0];
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (
+      paymentIntent.metadata?.userId !== String(payment.user_id) ||
+      paymentIntent.metadata?.equipmentId !== String(payment.equipment_id) ||
+      paymentIntent.metadata?.startDate !== String(payment.rental_start_date) ||
+      paymentIntent.metadata?.endDate !== String(payment.rental_end_date) ||
+      Number(paymentIntent.amount) !== Math.round(Number(payment.total_amount) * 100)
+    ) {
+      return res.status(400).json({ error: 'Payment metadata does not match the booking request' });
+    }
 
     await db.query('UPDATE payments SET status = ? WHERE payment_id = ? AND user_id = ?', [
       paymentIntent.status === 'succeeded' ? 'completed' : paymentIntent.status,
@@ -133,7 +153,7 @@ router.post('/confirm', paymentRateLimit, requireAuth, async (req, res) => {
       req.user.id,
     ]);
 
-    const paymentRows = await db.query('SELECT * FROM payments WHERE payment_id = ? AND user_id = ? LIMIT 1', [
+    const updatedPaymentRows = await db.query('SELECT * FROM payments WHERE payment_id = ? AND user_id = ? LIMIT 1', [
       paymentIntentId,
       req.user.id,
     ]);
@@ -141,7 +161,7 @@ router.post('/confirm', paymentRateLimit, requireAuth, async (req, res) => {
     res.json({
       status: paymentIntent.status,
       paymentId: paymentIntentId,
-      payment: paymentRows[0] || null,
+      payment: updatedPaymentRows[0] || null,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

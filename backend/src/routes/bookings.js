@@ -276,11 +276,7 @@ router.put('/:id', protectedRateLimit, requireAuth, async (req, res) => {
     const params = [];
 
     for (const [key, value] of updates) {
-      if (key === 'paymentStatus') {
-        fields.push('payment_status = ?');
-      } else {
-        fields.push(`${key} = ?`);
-      }
+      fields.push(`${key} = ?`);
       params.push(value);
     }
 

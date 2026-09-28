@@ -404,4 +404,63 @@ describe('dashboard and favorites routes', () => {
     expect(payload.error).toBe('A completed payment is required for this booking');
     expect(fakeConnection.rollback).toHaveBeenCalled();
   });
+
+  test('creates an unpaid same-day booking with pending earnings for one day', async () => {
+    const fakeConnection = {
+      beginTransaction: jest.fn().mockResolvedValue(undefined),
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn(),
+      execute: jest
+        .fn()
+        .mockResolvedValueOnce([[{ id: 22, owner_id: 99, name: 'Saw' }]])
+        .mockResolvedValueOnce([[]])
+        .mockResolvedValueOnce([{ insertId: 321 }])
+        .mockResolvedValueOnce([{ affectedRows: 1 }])
+        .mockResolvedValueOnce([{ insertId: 654 }]),
+    };
+
+    db.getPool.mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(fakeConnection),
+    });
+    db.query.mockResolvedValueOnce([
+      {
+        id: 321,
+        renter_id: 7,
+        equipment_id: 22,
+        equipment_name: 'Saw',
+        owner_id: 99,
+        start_date: '2026-10-10',
+        end_date: '2026-10-10',
+        total_price: '80.00',
+        status: 'pending',
+        payment_status: 'unpaid',
+        payment_id: null,
+      },
+    ]);
+
+    const response = await fetch(`${baseUrl}/bookings`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        equipmentId: 22,
+        startDate: '2026-10-10',
+        endDate: '2026-10-10',
+        totalPrice: 80,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.status).toBe('pending');
+    expect(payload.paymentStatus).toBe('unpaid');
+    expect(fakeConnection.execute).toHaveBeenNthCalledWith(
+      5,
+      expect.stringContaining('INSERT INTO user_earnings'),
+      [99, 321, 22, 80, 4, 76, 'pending', '2026-10-10', '2026-10-10', 1]
+    );
+  });
 });
