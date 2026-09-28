@@ -1,12 +1,17 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { createRateLimiter } = require('../middleware/rateLimit');
 const { listFavoritesForUser } = require('../services/favorites');
 const { serializeBooking, serializeEarning, serializeUser, toNumber } = require('../utils/serializers');
 
 const router = express.Router();
-const protectedRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 120 });
+const protectedRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 async function getOwnerDashboard(user) {
   const ownerId = user.id;
@@ -150,6 +155,7 @@ async function getRenterDashboard(user) {
           COALESCE(SUM(total_price), 0) AS total_spending
         FROM bookings
         WHERE renter_id = ?
+          AND status NOT IN ('cancelled', 'rejected')
       `,
       [renterId]
     ),
@@ -189,6 +195,8 @@ async function getRenterDashboard(user) {
         JOIN equipment e ON e.id = b.equipment_id
         LEFT JOIN users owner ON owner.id = e.owner_id
         WHERE b.renter_id = ?
+          AND b.end_date < CURDATE()
+          AND b.status NOT IN ('cancelled', 'rejected')
         ORDER BY b.start_date DESC, b.created_at DESC
         LIMIT 10
       `,
@@ -217,7 +225,7 @@ async function getRenterDashboard(user) {
   };
 }
 
-router.get('/', requireAuth, protectedRateLimit, async (req, res) => {
+router.get('/', protectedRateLimit, requireAuth, async (req, res) => {
   try {
     const users = await db.query(
       `

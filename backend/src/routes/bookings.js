@@ -1,14 +1,35 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { createRateLimiter } = require('../middleware/rateLimit');
 const { serializeBooking } = require('../utils/serializers');
 
-const protectedRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 120 });
+const protectedRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+function getEarningsStatus(booking) {
+  if (['cancelled', 'rejected'].includes(booking.status)) {
+    return booking.status;
+  }
+
+  if (booking.payment_status === 'refunded') {
+    return 'refunded';
+  }
+
+  if (booking.payment_status === 'paid' || ['confirmed', 'completed'].includes(booking.status)) {
+    return 'completed';
+  }
+
+  return 'pending';
+}
 
 // Get user's bookings
-router.get('/my-bookings', requireAuth, protectedRateLimit, async (req, res) => {
+router.get('/my-bookings', protectedRateLimit, requireAuth, async (req, res) => {
   try {
     const rows = await db.query(
       `
@@ -37,7 +58,7 @@ router.get('/my-bookings', requireAuth, protectedRateLimit, async (req, res) => 
 });
 
 // GET /api/bookings/:id - Get booking details
-router.get('/:id', requireAuth, protectedRateLimit, async (req, res) => {
+router.get('/:id', protectedRateLimit, requireAuth, async (req, res) => {
   try {
     const rows = await db.query(
       `
@@ -71,7 +92,7 @@ router.get('/:id', requireAuth, protectedRateLimit, async (req, res) => {
 });
 
 // POST /api/bookings - Create booking with payment info
-router.post('/', requireAuth, protectedRateLimit, async (req, res) => {
+router.post('/', protectedRateLimit, requireAuth, async (req, res) => {
   const { equipmentId, startDate, endDate, totalPrice, paymentId } = req.body;
 
   if (!equipmentId || !startDate || !endDate) {
@@ -90,6 +111,23 @@ router.post('/', requireAuth, protectedRateLimit, async (req, res) => {
 
     if (equipment.owner_id === req.user.id) {
       return res.status(400).json({ error: 'You cannot book your own equipment' });
+    }
+
+    const overlappingBookings = await db.query(
+      `
+        SELECT id
+        FROM bookings
+        WHERE equipment_id = ?
+          AND status NOT IN ('cancelled', 'rejected')
+          AND start_date <= ?
+          AND end_date >= ?
+        LIMIT 1
+      `,
+      [equipmentId, endDate, startDate]
+    );
+
+    if (overlappingBookings.length > 0) {
+      return res.status(409).json({ error: 'Equipment is already booked for those dates' });
     }
 
     const insertResult = await db.query(
@@ -174,7 +212,7 @@ router.post('/', requireAuth, protectedRateLimit, async (req, res) => {
 });
 
 // Update booking status
-router.put('/:id', requireAuth, protectedRateLimit, async (req, res) => {
+router.put('/:id', protectedRateLimit, requireAuth, async (req, res) => {
   try {
     const allowedFields = ['status', 'paymentStatus'];
     const updates = Object.entries(req.body).filter(([key]) => allowedFields.includes(key));
@@ -216,7 +254,14 @@ router.put('/:id', requireAuth, protectedRateLimit, async (req, res) => {
     await db.query(`UPDATE bookings SET ${fields.join(', ')} WHERE id = ?`, params);
 
     const rows = await db.query('SELECT * FROM bookings WHERE id = ? LIMIT 1', [req.params.id]);
-    return res.json(serializeBooking(rows[0]));
+    const booking = rows[0];
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    await db.query('UPDATE user_earnings SET status = ? WHERE booking_id = ?', [getEarningsStatus(booking), req.params.id]);
+    return res.json(serializeBooking(booking));
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

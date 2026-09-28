@@ -18,6 +18,10 @@ router.post('/create-intent', async (req, res) => {
     if (bookingId != null) {
       const bookingRows = await db.query('SELECT id FROM bookings WHERE id = ? LIMIT 1', [bookingId]);
       persistedBookingId = bookingRows[0]?.id || null;
+
+      if (!persistedBookingId) {
+        return res.status(404).json({ error: 'Booking not found' });
+      }
     }
 
     const totalAmountCents = Math.round(amount * 100); // Convert to cents

@@ -141,6 +141,7 @@ describe('dashboard and favorites routes', () => {
   test('creates a paid booking and related earnings for another owner equipment item', async () => {
     db.query
       .mockResolvedValueOnce([{ id: 10, owner_id: 99, name: 'Generator' }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce({ insertId: 120 })
       .mockResolvedValueOnce({ affectedRows: 1 })
       .mockResolvedValueOnce({ insertId: 220 })
@@ -182,9 +183,31 @@ describe('dashboard and favorites routes', () => {
     expect(payload.totalPrice).toBe(100);
 
     expect(db.query).toHaveBeenNthCalledWith(
-      4,
+      5,
       expect.stringContaining('INSERT INTO user_earnings'),
       [99, 120, 10, 100, 5, 95, 'completed', '2026-10-10', '2026-10-12', 2]
     );
+  });
+
+  test('rejects booking your own equipment', async () => {
+    db.query.mockResolvedValueOnce([{ id: 10, owner_id: 7, name: 'Generator' }]);
+
+    const response = await fetch(`${baseUrl}/bookings`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        equipmentId: 10,
+        startDate: '2026-10-10',
+        endDate: '2026-10-12',
+        totalPrice: 100,
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toBe('You cannot book your own equipment');
   });
 });

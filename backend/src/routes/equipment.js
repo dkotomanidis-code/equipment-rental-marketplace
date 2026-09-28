@@ -1,11 +1,16 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { createRateLimiter } = require('../middleware/rateLimit');
 const { serializeEquipment } = require('../utils/serializers');
 
-const protectedRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 120 });
+const protectedRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Get all equipment
 router.get('/', async (req, res) => {
@@ -71,7 +76,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create equipment (owner only)
-router.post('/', requireAuth, protectedRateLimit, async (req, res) => {
+router.post('/', protectedRateLimit, requireAuth, async (req, res) => {
   try {
     const { name, description, category, pricePerDay, location, imageUrl } = req.body;
 
@@ -97,7 +102,7 @@ router.post('/', requireAuth, protectedRateLimit, async (req, res) => {
 });
 
 // Update equipment
-router.put('/:id', requireAuth, protectedRateLimit, async (req, res) => {
+router.put('/:id', protectedRateLimit, requireAuth, async (req, res) => {
   try {
     const ownerRows = await db.query('SELECT id FROM equipment WHERE id = ? AND owner_id = ? LIMIT 1', [
       req.params.id,
@@ -143,7 +148,7 @@ router.put('/:id', requireAuth, protectedRateLimit, async (req, res) => {
 });
 
 // Delete equipment
-router.delete('/:id', requireAuth, protectedRateLimit, async (req, res) => {
+router.delete('/:id', protectedRateLimit, requireAuth, async (req, res) => {
   try {
     const result = await db.query('DELETE FROM equipment WHERE id = ? AND owner_id = ?', [req.params.id, req.user.id]);
 
