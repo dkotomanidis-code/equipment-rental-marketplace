@@ -147,12 +147,23 @@ async function getOwnerDashboard(user) {
 
 async function getRenterDashboard(user) {
   const renterId = user.id;
-  const [bookingSummaryRows, currentBookingRows, rentalHistoryRows, favorites] = await Promise.all([
+  const [bookingSummaryRows, bookingCountRows, currentBookingRows, rentalHistoryRows, favorites] = await Promise.all([
     db.query(
       `
         SELECT
           COUNT(*) AS total_rentals,
           COALESCE(SUM(total_price), 0) AS total_spending
+        FROM bookings
+        WHERE renter_id = ?
+          AND status NOT IN ('cancelled', 'rejected')
+      `,
+      [renterId]
+    ),
+    db.query(
+      `
+        SELECT
+          SUM(CASE WHEN start_date <= CURDATE() AND end_date >= CURDATE() THEN 1 ELSE 0 END) AS current_bookings,
+          SUM(CASE WHEN start_date > CURDATE() THEN 1 ELSE 0 END) AS upcoming_bookings
         FROM bookings
         WHERE renter_id = ?
           AND status NOT IN ('cancelled', 'rejected')
@@ -206,17 +217,14 @@ async function getRenterDashboard(user) {
   ]);
 
   const currentAndUpcomingBookings = currentBookingRows.map((row) => serializeBooking(row));
-  const today = new Date().toISOString().slice(0, 10);
 
   return {
     role: 'renter',
     summary: {
       totalRentals: Number(bookingSummaryRows[0]?.total_rentals || 0),
       totalSpending: toNumber(bookingSummaryRows[0]?.total_spending) || 0,
-      currentBookings: currentAndUpcomingBookings.filter(
-        (booking) => booking.startDate <= today && booking.endDate >= today
-      ).length,
-      upcomingBookings: currentAndUpcomingBookings.filter((booking) => booking.startDate > today).length,
+      currentBookings: Number(bookingCountRows[0]?.current_bookings || 0),
+      upcomingBookings: Number(bookingCountRows[0]?.upcoming_bookings || 0),
       savedFavorites: favorites.length,
     },
     currentAndUpcomingBookings,

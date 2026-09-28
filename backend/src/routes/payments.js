@@ -3,9 +3,9 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const db = require('../db');
+const { PLATFORM_COMMISSION_RATE } = require('../constants/payments');
 const { requireAuth } = require('../middleware/auth');
 
-const PLATFORM_COMMISSION_RATE = 0.05; // 5%
 const paymentRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
@@ -75,6 +75,10 @@ router.post('/create-intent', paymentRateLimit, requireAuth, async (req, res) =>
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
+          user_id = VALUES(user_id),
+          equipment_id = VALUES(equipment_id),
+          rental_start_date = VALUES(rental_start_date),
+          rental_end_date = VALUES(rental_end_date),
           subtotal = VALUES(subtotal),
           tax_amount = VALUES(tax_amount),
           total_amount = VALUES(total_amount),
@@ -145,7 +149,7 @@ router.post('/confirm', paymentRateLimit, requireAuth, async (req, res) => {
 });
 
 // POST /api/payments/refund - Refund a payment
-router.post('/refund', async (req, res) => {
+router.post('/refund', paymentRateLimit, requireAuth, async (req, res) => {
   try {
     const { paymentIntentId, reason = 'requested_by_customer' } = req.body;
 
@@ -153,12 +157,25 @@ router.post('/refund', async (req, res) => {
       return res.status(400).json({ error: 'Payment intent ID required' });
     }
 
+    const paymentRows = await db.query('SELECT payment_id FROM payments WHERE payment_id = ? AND user_id = ? LIMIT 1', [
+      paymentIntentId,
+      req.user.id,
+    ]);
+
+    if (paymentRows.length === 0) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
     const refund = await stripe.refunds.create({
       payment_intent: paymentIntentId,
       reason,
     });
 
-    await db.query('UPDATE payments SET status = ? WHERE payment_id = ?', ['refunded', paymentIntentId]);
+    await db.query('UPDATE payments SET status = ? WHERE payment_id = ? AND user_id = ?', [
+      'refunded',
+      paymentIntentId,
+      req.user.id,
+    ]);
 
     res.json({
       refundId: refund.id,
@@ -171,9 +188,12 @@ router.post('/refund', async (req, res) => {
 });
 
 // GET /api/payments/:paymentId - Get payment details
-router.get('/:paymentId', async (req, res) => {
+router.get('/:paymentId', paymentRateLimit, requireAuth, async (req, res) => {
   try {
-    const rows = await db.query('SELECT * FROM payments WHERE payment_id = ? LIMIT 1', [req.params.paymentId]);
+    const rows = await db.query('SELECT * FROM payments WHERE payment_id = ? AND user_id = ? LIMIT 1', [
+      req.params.paymentId,
+      req.user.id,
+    ]);
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Payment not found' });
     }

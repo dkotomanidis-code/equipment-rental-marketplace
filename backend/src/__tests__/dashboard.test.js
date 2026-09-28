@@ -1,6 +1,19 @@
 process.env.JWT_SECRET = 'test-secret';
 
 const jwt = require('jsonwebtoken');
+const mockStripeCreate = jest.fn();
+const mockStripeRetrieve = jest.fn();
+const mockStripeRefundCreate = jest.fn();
+
+jest.mock('stripe', () => () => ({
+  paymentIntents: {
+    create: mockStripeCreate,
+    retrieve: mockStripeRetrieve,
+  },
+  refunds: {
+    create: mockStripeRefundCreate,
+  },
+}));
 
 jest.mock('../db', () => ({
   query: jest.fn(),
@@ -30,6 +43,9 @@ describe('dashboard and favorites routes', () => {
   beforeEach(() => {
     db.query.mockReset();
     db.getPool.mockReset();
+    mockStripeCreate.mockReset();
+    mockStripeRetrieve.mockReset();
+    mockStripeRefundCreate.mockReset();
   });
 
   test('rejects unauthenticated dashboard requests', async () => {
@@ -138,6 +154,97 @@ describe('dashboard and favorites routes', () => {
 
     expect(response.status).toBe(409);
     expect(payload.error).toBe('Equipment is already in favorites');
+  });
+
+  test('rejects an invalid favorite equipment id', async () => {
+    const response = await fetch(`${baseUrl}/favorites`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ equipmentId: 'not-a-number' }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toBe('equipmentId is required');
+  });
+
+  test('returns 404 when favorite equipment does not exist', async () => {
+    db.query.mockResolvedValueOnce([]);
+
+    const response = await fetch(`${baseUrl}/favorites`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ equipmentId: 999 }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.error).toBe('Equipment not found');
+  });
+
+  test('validates required payment intent fields', async () => {
+    const response = await fetch(`${baseUrl}/payments/create-intent`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ amount: 100 }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toBe('amount, equipmentId, startDate, and endDate are required');
+  });
+
+  test('creates an authenticated payment intent and persists ownership metadata', async () => {
+    mockStripeCreate.mockResolvedValueOnce({
+      id: 'pi_123',
+      client_secret: 'secret_123',
+    });
+    db.query.mockResolvedValueOnce({ insertId: 1 });
+
+    const response = await fetch(`${baseUrl}/payments/create-intent`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: 100,
+        currency: 'usd',
+        equipmentId: 10,
+        startDate: '2026-10-10',
+        endDate: '2026-10-12',
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.paymentId).toBe('pi_123');
+    expect(mockStripeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 10000,
+        currency: 'usd',
+        metadata: expect.objectContaining({
+          userId: '7',
+          equipmentId: '10',
+          startDate: '2026-10-10',
+          endDate: '2026-10-12',
+          amount: '100',
+        }),
+      })
+    );
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO payments'),
+      expect.arrayContaining(['pi_123', null, 7, 10, '2026-10-10', '2026-10-12'])
+    );
   });
 
   test('creates a paid booking and related earnings for another owner equipment item', async () => {

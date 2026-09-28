@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
+const { PLATFORM_COMMISSION_RATE } = require('../constants/payments');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { serializeBooking } = require('../utils/serializers');
@@ -192,7 +193,7 @@ router.post('/', protectedRateLimit, requireAuth, async (req, res) => {
 
       if (equipment.owner_id && Number(totalPrice || 0) > 0) {
         const amount = Number(totalPrice);
-        const commission = Number((amount * 0.05).toFixed(2));
+        const commission = Number((amount * PLATFORM_COMMISSION_RATE).toFixed(2));
         const netAmount = Number((amount - commission).toFixed(2));
         const daysRented = Math.max(
           1,
@@ -248,7 +249,7 @@ router.post('/', protectedRateLimit, requireAuth, async (req, res) => {
 // Update booking status
 router.put('/:id', protectedRateLimit, requireAuth, async (req, res) => {
   try {
-    const allowedFields = ['status', 'paymentStatus'];
+    const allowedFields = ['status'];
     const updates = Object.entries(req.body).filter(([key]) => allowedFields.includes(key));
 
     if (updates.length === 0) {
