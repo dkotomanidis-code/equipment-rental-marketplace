@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimit');
 const { serializeUser } = require('../utils/serializers');
 
 function createToken(user) {
@@ -11,6 +12,8 @@ function createToken(user) {
     expiresIn: process.env.JWT_EXPIRE || '7d',
   });
 }
+
+router.use(createRateLimiter({ windowMs: 15 * 60 * 1000, max: 30 }));
 
 // Sign Up
 router.post('/signup', async (req, res) => {

@@ -106,14 +106,20 @@ function Dashboard() {
   const removeFavorite = async (equipmentId) => {
     try {
       await axios.delete(`${apiBaseUrl}/favorites/${equipmentId}`, { headers });
-      setDashboard((current) => ({
-        ...current,
-        summary: {
-          ...current.summary,
-          savedFavorites: Math.max(0, (current.summary.savedFavorites || 1) - 1),
-        },
-        favorites: current.favorites.filter((favorite) => favorite.equipmentId !== equipmentId),
-      }));
+      setDashboard((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          summary: {
+            ...current.summary,
+            savedFavorites: Math.max(0, (current.summary?.savedFavorites || 1) - 1),
+          },
+          favorites: (current.favorites || []).filter((favorite) => favorite.equipmentId !== equipmentId),
+        };
+      });
     } catch (err) {
       setError(err.response?.data?.error || 'Unable to remove favorite');
     }

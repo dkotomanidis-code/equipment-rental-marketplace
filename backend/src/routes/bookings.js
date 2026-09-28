@@ -2,10 +2,13 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimit');
 const { serializeBooking } = require('../utils/serializers');
 
+const protectedRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 120 });
+
 // Get user's bookings
-router.get('/my-bookings', requireAuth, async (req, res) => {
+router.get('/my-bookings', requireAuth, protectedRateLimit, async (req, res) => {
   try {
     const rows = await db.query(
       `
@@ -34,7 +37,7 @@ router.get('/my-bookings', requireAuth, async (req, res) => {
 });
 
 // GET /api/bookings/:id - Get booking details
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requireAuth, protectedRateLimit, async (req, res) => {
   try {
     const rows = await db.query(
       `
@@ -68,7 +71,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/bookings - Create booking with payment info
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, protectedRateLimit, async (req, res) => {
   const { equipmentId, startDate, endDate, totalPrice, paymentId } = req.body;
 
   if (!equipmentId || !startDate || !endDate) {
@@ -83,6 +86,10 @@ router.post('/', requireAuth, async (req, res) => {
 
     if (!equipment) {
       return res.status(404).json({ error: 'Equipment not found' });
+    }
+
+    if (equipment.owner_id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot book your own equipment' });
     }
 
     const insertResult = await db.query(
@@ -167,7 +174,7 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // Update booking status
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, protectedRateLimit, async (req, res) => {
   try {
     const allowedFields = ['status', 'paymentStatus'];
     const updates = Object.entries(req.body).filter(([key]) => allowedFields.includes(key));

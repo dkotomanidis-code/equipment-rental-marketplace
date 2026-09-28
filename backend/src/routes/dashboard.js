@@ -1,10 +1,12 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimit');
 const { listFavoritesForUser } = require('../services/favorites');
 const { serializeBooking, serializeEarning, serializeUser, toNumber } = require('../utils/serializers');
 
 const router = express.Router();
+const protectedRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 120 });
 
 async function getOwnerDashboard(user) {
   const ownerId = user.id;
@@ -215,7 +217,7 @@ async function getRenterDashboard(user) {
   };
 }
 
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, protectedRateLimit, async (req, res) => {
   try {
     const users = await db.query(
       `

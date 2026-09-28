@@ -137,4 +137,54 @@ describe('dashboard and favorites routes', () => {
     expect(response.status).toBe(409);
     expect(payload.error).toBe('Equipment is already in favorites');
   });
+
+  test('creates a paid booking and related earnings for another owner equipment item', async () => {
+    db.query
+      .mockResolvedValueOnce([{ id: 10, owner_id: 99, name: 'Generator' }])
+      .mockResolvedValueOnce({ insertId: 120 })
+      .mockResolvedValueOnce({ affectedRows: 1 })
+      .mockResolvedValueOnce({ insertId: 220 })
+      .mockResolvedValueOnce([
+        {
+          id: 120,
+          renter_id: 7,
+          equipment_id: 10,
+          equipment_name: 'Generator',
+          owner_id: 99,
+          start_date: '2026-10-10',
+          end_date: '2026-10-12',
+          total_price: '100.00',
+          status: 'confirmed',
+          payment_status: 'paid',
+          payment_id: 'pi_123',
+        },
+      ]);
+
+    const response = await fetch(`${baseUrl}/bookings`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        equipmentId: 10,
+        startDate: '2026-10-10',
+        endDate: '2026-10-12',
+        totalPrice: 100,
+        paymentId: 'pi_123',
+      }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.status).toBe('confirmed');
+    expect(payload.paymentStatus).toBe('paid');
+    expect(payload.totalPrice).toBe(100);
+
+    expect(db.query).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining('INSERT INTO user_earnings'),
+      [99, 120, 10, 100, 5, 95, 'completed', '2026-10-10', '2026-10-12', 2]
+    );
+  });
 });

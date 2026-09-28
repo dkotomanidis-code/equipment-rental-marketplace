@@ -14,6 +14,12 @@ router.post('/create-intent', async (req, res) => {
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
+    let persistedBookingId = null;
+    if (bookingId != null) {
+      const bookingRows = await db.query('SELECT id FROM bookings WHERE id = ? LIMIT 1', [bookingId]);
+      persistedBookingId = bookingRows[0]?.id || null;
+    }
+
     const totalAmountCents = Math.round(amount * 100); // Convert to cents
     const commissionCents = Math.round(totalAmountCents * PLATFORM_COMMISSION_RATE);
     const ownerAmountCents = totalAmountCents - commissionCents;
@@ -50,7 +56,7 @@ router.post('/create-intent', async (req, res) => {
       `,
       [
         paymentIntent.id,
-        bookingId || null,
+        persistedBookingId,
         totalAmountCents / 100,
         0,
         totalAmountCents / 100,

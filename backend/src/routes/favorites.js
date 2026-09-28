@@ -1,11 +1,13 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { createRateLimiter } = require('../middleware/rateLimit');
 const { listFavoritesForUser } = require('../services/favorites');
 
 const router = express.Router();
+const protectedRateLimit = createRateLimiter({ windowMs: 60 * 1000, max: 120 });
 
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, protectedRateLimit, async (req, res) => {
   try {
     const favorites = await listFavoritesForUser(req.user.id);
     res.json(favorites);
@@ -14,7 +16,7 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, protectedRateLimit, async (req, res) => {
   try {
     const equipmentId = Number(req.body.equipmentId);
 
@@ -54,7 +56,7 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-router.delete('/:equipmentId', requireAuth, async (req, res) => {
+router.delete('/:equipmentId', requireAuth, protectedRateLimit, async (req, res) => {
   try {
     const equipmentId = Number(req.params.equipmentId);
 
