@@ -9,11 +9,17 @@ const users = [];
 // Sign Up
 router.post('/signup', async (req, res) => {
   try {
-    const { username, email, password, firstName, lastName } = req.body;
+    const { email, password } = req.body;
 
-    // Validate input
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    // Validate
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password required' });
+    }
+
+    // Check if user exists
+    const existingUser = users.find((u) => u.email === email);
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists' });
     }
 
     // Hash password
@@ -22,11 +28,8 @@ router.post('/signup', async (req, res) => {
     // Create user
     const user = {
       id: Date.now(),
-      username,
       email,
       password: hashedPassword,
-      firstName,
-      lastName,
     };
 
     users.push(user);
@@ -37,12 +40,12 @@ router.post('/signup', async (req, res) => {
     });
 
     res.status(201).json({
-      message: 'User created successfully',
+      message: 'Account created successfully',
       token,
-      user: { id: user.id, username, email },
+      user: { id: user.id, email: user.email },
     });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({ message: 'Signup error: ' + err.message });
   }
 });
 
@@ -71,7 +74,7 @@ router.post('/login', async (req, res) => {
     res.json({
       message: 'Login successful',
       token,
-      user: { id: user.id, username: user.username, email: user.email },
+      user: { id: user.id, email: user.email },
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

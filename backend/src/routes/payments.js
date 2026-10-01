@@ -16,7 +16,7 @@ router.post('/create-intent', async (req, res) => {
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
-    const totalAmountCents = Math.round(amount * 100); // Convert to cents
+    const totalAmountCents = Math.round(amount * 100);
     const commissionCents = Math.round(totalAmountCents * PLATFORM_COMMISSION_RATE);
     const ownerAmountCents = totalAmountCents - commissionCents;
 
@@ -28,14 +28,12 @@ router.post('/create-intent', async (req, res) => {
       metadata.bookingId = String(bookingId);
     }
 
-    // Create Stripe payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalAmountCents,
       currency,
       metadata,
     });
 
-    // Store payment record
     const payment = {
       paymentId: paymentIntent.id,
       bookingId: bookingId || null,
@@ -77,6 +75,30 @@ router.post('/confirm', async (req, res) => {
       payment.updatedAt = new Date();
     }
 
+    // ✅ TRIGGER PAYMENT NOTIFICATION
+    if (paymentIntent.status === 'succeeded') {
+      try {
+        const userId = req.user?.id || 1;
+        const bookingId = paymentIntent.metadata?.bookingId || null;
+
+        await fetch(`${process.env.API_URL || 'http://localhost:5000'}/api/notifications`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            type: 'payment_completed',
+            title: 'Payment Successful',
+            message: `Payment of $${(paymentIntent.amount / 100).toFixed(2)} has been successfully processed`,
+            relatedBookingId: bookingId,
+          }),
+        });
+
+        console.log(`Payment notification sent for payment ${paymentIntentId}`);
+      } catch (error) {
+        console.error('Error sending payment notification:', error);
+      }
+    }
+
     res.json({
       status: paymentIntent.status,
       paymentId: paymentIntentId,
@@ -105,6 +127,26 @@ router.post('/refund', async (req, res) => {
     if (payment) {
       payment.status = 'refunded';
       payment.updatedAt = new Date();
+    }
+
+    // ✅ TRIGGER REFUND NOTIFICATION
+    try {
+      const userId = req.user?.id || 1;
+
+      await fetch(`${process.env.API_URL || 'http://localhost:5000'}/api/notifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          type: 'refund_processed',
+          title: 'Refund Processed',
+          message: `Your refund of $${(refund.amount / 100).toFixed(2)} has been processed`,
+        }),
+      });
+
+      console.log(`Refund notification sent for refund ${refund.id}`);
+    } catch (error) {
+      console.error('Error sending refund notification:', error);
     }
 
     res.json({
