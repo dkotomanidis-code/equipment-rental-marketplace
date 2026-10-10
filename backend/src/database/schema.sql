@@ -1,6 +1,6 @@
 -- Create users table
 CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(255) UNIQUE NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
@@ -17,8 +17,8 @@ CREATE TABLE users (
 
 -- Create equipment table
 CREATE TABLE equipment (
-  id SERIAL PRIMARY KEY,
-  owner_id INTEGER NOT NULL REFERENCES users(id),
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  owner_id INT NOT NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   category VARCHAR(100),
@@ -29,13 +29,15 @@ CREATE TABLE equipment (
   image_url VARCHAR(255),
   availability_status BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 
 -- Create payments table
 CREATE TABLE payments (
-  id SERIAL PRIMARY KEY,
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   payment_id VARCHAR(255) UNIQUE NOT NULL,
+  user_id INT NOT NULL,
   booking_id INTEGER,
   amount DECIMAL(10, 2) NOT NULL,
   commission DECIMAL(10, 2) NOT NULL,
@@ -43,22 +45,25 @@ CREATE TABLE payments (
   currency VARCHAR(10) DEFAULT 'usd',
   status VARCHAR(50) DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 -- Create bookings table
 CREATE TABLE bookings (
-  id SERIAL PRIMARY KEY,
-  renter_id INTEGER NOT NULL REFERENCES users(id),
-  equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  renter_id INT NOT NULL,
+  equipment_id INT NOT NULL,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   total_price DECIMAL(10, 2) NOT NULL,
   status VARCHAR(50) DEFAULT 'pending',
   payment_status VARCHAR(50) DEFAULT 'unpaid',
-  payment_id VARCHAR(255),
+  payment_id VARCHAR(255) UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (renter_id) REFERENCES users(id),
+  FOREIGN KEY (equipment_id) REFERENCES equipment(id)
 );
 
 -- Add foreign key from bookings to payments after both tables exist
@@ -68,13 +73,15 @@ ALTER TABLE bookings
 
 -- Create reviews table
 CREATE TABLE reviews (
-  id SERIAL PRIMARY KEY,
-  booking_id INTEGER NOT NULL REFERENCES bookings(id),
-  reviewer_id INTEGER NOT NULL REFERENCES users(id),
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT NOT NULL,
+  reviewer_id INT NOT NULL,
   rating INTEGER CHECK (rating >= 1 AND rating <= 5),
   comment TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (booking_id) REFERENCES bookings(id),
+  FOREIGN KEY (reviewer_id) REFERENCES users(id)
 );
 
 -- Create indexes for better performance
