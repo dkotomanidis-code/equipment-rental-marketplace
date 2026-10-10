@@ -4,6 +4,7 @@ process.env.STRIPE_WEBHOOK_SECRET = require('crypto').randomBytes(32).toString('
 
 jest.mock('../database/pool', () => ({
   execute: jest.fn(),
+  query: jest.fn(),
   getConnection: jest.fn(),
 }));
 jest.mock('stripe', () => {
@@ -22,6 +23,7 @@ const stripe = require('stripe')();
 const app = require('../index');
 const { signToken } = require('../middleware/auth');
 const { rentalDays, priceCents } = require('../utils/api');
+const { hashRecoveryCode } = require('../utils/recoveryCode');
 
 let server;
 let base;
@@ -58,6 +60,7 @@ afterAll((done) => { server.close(done); });
 beforeEach(() => {
   jest.clearAllMocks();
   pool.execute.mockReset();
+  pool.query.mockResolvedValue([[{ tokenVersion: 0 }]]);
   connection = {
     execute: jest.fn(), beginTransaction: jest.fn(), commit: jest.fn(),
     rollback: jest.fn(), release: jest.fn(),
@@ -67,20 +70,23 @@ beforeEach(() => {
 
 describe('authentication', () => {
   test('signup hashes the password, persists a user and returns an expiring signed JWT', async () => {
-    pool.execute.mockResolvedValue([{ insertId: 2 }]);
-    const result = await request('POST', '/auth/signup', { ...user, password: 'a-test-password' });
+    pool.execute.mockResolvedValueOnce([[]]);
+    connection.execute.mockImplementation(async (sql) =>
+      sql.includes('INSERT INTO users') ? [{ insertId: 2 }] : [{}]
+    );
+    const result = await request('POST', '/auth/signup', { ...user, password: 'a-test-password', passwordConfirm: 'a-test-password' });
     expect(result.status).toBe(201);
     expect(result.body.user).toEqual(user);
     const payload = jwt.verify(result.body.token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     expect(payload).toMatchObject(user);
     expect(payload.exp - payload.iat).toBe(7 * 86400);
-    const params = pool.execute.mock.calls[0][1];
+    const params = connection.execute.mock.calls[0][1];
     expect(await bcrypt.compare('a-test-password', params[2])).toBe(true);
     expect(result.body.user.password).toBeUndefined();
   });
 
   test('login loads persisted credentials and returns the existing response shape', async () => {
-    pool.execute.mockResolvedValue([[{ ...user, password: await bcrypt.hash('password', 4) }]]);
+    pool.execute.mockResolvedValue([[{ ...user, password: await bcrypt.hash('password', 4), tokenVersion: 0 }]]);
     const result = await request('POST', '/auth/login', { email: user.email, password: 'password' });
     expect(result.status).toBe(200);
     expect(result.body).toMatchObject({ message: 'Login successful', user });
@@ -88,11 +94,14 @@ describe('authentication', () => {
   });
 
   test('signup accepts the frontend empty optional name fields', async () => {
-    pool.execute.mockResolvedValue([{ insertId: 2 }]);
+    pool.execute.mockResolvedValueOnce([[]]);
+    connection.execute.mockImplementation(async (sql) =>
+      sql.includes('INSERT INTO users') ? [{ insertId: 2 }] : [{}]
+    );
     expect((await request('POST', '/auth/signup', {
-      ...user, password: 'password', firstName: '', lastName: '',
+      ...user, password: 'password', passwordConfirm: 'password', firstName: '', lastName: '',
     })).status).toBe(201);
-    expect(pool.execute.mock.calls[0][1].slice(3)).toEqual([null, null]);
+    expect(connection.execute.mock.calls[0][1].slice(3)).toEqual([null, null]);
   });
 
   test.each([{ rows: [] }, { rows: [{ ...user, password: '$2a$04$invalid' }] }])('invalid login returns 401', async ({ rows }) => {
@@ -110,10 +119,44 @@ describe('authentication', () => {
     expect(pool.execute).not.toHaveBeenCalled();
   });
 
+  test('password reset increments token version and rejects tokens issued before reset', async () => {
+    const recoveryCode = 'A1B2C3D4';
+    connection.execute
+      .mockResolvedValueOnce([[{ id: user.id, email: user.email }]])
+      .mockResolvedValueOnce([[{ id: 9, code_hash: hashRecoveryCode(recoveryCode) }]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]);
+    const result = await request('POST', '/recovery/reset-password', {
+      email: user.email,
+      recoveryCode,
+      newPassword: 'a-new-password',
+      newPasswordConfirm: 'a-new-password',
+    });
+    expect(result.status).toBe(200);
+    expect(connection.execute.mock.calls[3][0]).toContain('token_version = token_version + 1');
+    expect(connection.commit).toHaveBeenCalled();
+
+    pool.query.mockResolvedValue([[{ tokenVersion: 1 }]]);
+    expect((await request('GET', '/bookings', undefined, signToken(user))).status).toBe(401);
+  });
+
+  test('public user profiles do not expose email or phone', async () => {
+    pool.execute.mockResolvedValueOnce([[
+      { id: 3, username: 'public', first_name: 'Public', bio: 'Hello' },
+    ]]);
+    const result = await request('GET', '/auth/user/3');
+    expect(result.status).toBe(200);
+    expect(result.body.email).toBeUndefined();
+    expect(result.body.phone).toBeUndefined();
+    expect(pool.execute.mock.calls[0][0]).not.toMatch(/\b(email|phone)\b/);
+  });
+
   test('duplicate signup returns a safe conflict', async () => {
     const log = jest.spyOn(console, 'error').mockImplementation(() => {});
     pool.execute.mockRejectedValue({ code: 'ER_DUP_ENTRY' });
-    const result = await request('POST', '/auth/signup', { ...user, password: 'password' });
+    const result = await request('POST', '/auth/signup', {
+      ...user, password: 'password', passwordConfirm: 'password',
+    });
     expect(result.status).toBe(409);
     expect(result.body.error).not.toContain('SQL');
     log.mockRestore();

@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import '../styles/Auth.css';
 
 export default function ForgotPassword({ language = 'en' }) {
-  const navigate = useNavigate();
   const [step, setStep] = useState('email'); // 'email' -> 'code' -> 'password' -> 'success'
   const [email, setEmail] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
@@ -160,7 +159,7 @@ export default function ForgotPassword({ language = 'en' }) {
 
     setLoading(true);
     try {
-      const response = await axios.post(
+      await axios.post(
         `${process.env.REACT_APP_API_URL || '/api'}/recovery/reset-password`,
         {
           email,

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE, authConfig } from '../utils/api';
+import '../styles/Features.css';
 
 const LABELS = {
   en: { title: 'Messages', loading: 'Loading messages…', empty: 'No conversations yet.', removed: 'Listing no longer available', message: 'Message', send: 'Send', error: 'Could not load messages.', required: 'Write a message first.' },

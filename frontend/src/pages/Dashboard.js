@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 function Dashboard() {
@@ -6,13 +6,7 @@ function Dashboard() {
   const [activeTab, setActiveTab] = useState('bookings');
   const token = localStorage.getItem('token');
 
-  useEffect(() => {
-    if (token) {
-      fetchBookings();
-    }
-  }, [token]);
-
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       const response = await axios.get(`${process.env.REACT_APP_API_URL}/bookings/my-bookings`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -21,7 +15,11 @@ function Dashboard() {
     } catch (error) {
       console.error('Error fetching bookings:', error);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (token) fetchBookings();
+  }, [token, fetchBookings]);
 
   return (
     <div className="dashboard">

@@ -7,7 +7,7 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', asyncRoute(async (req, res) => {
-  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const page = Math.min(100000, Math.max(1, Number.parseInt(req.query.page, 10) || 1));
   const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
   const offset = (page - 1) * limit;
   const [rows] = await pool.execute(

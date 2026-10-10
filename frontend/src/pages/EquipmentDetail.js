@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import FavoriteButton from '../components/FavoriteButton';
 import { API_BASE, authConfig } from '../utils/api';
+import '../styles/Features.css';
 
 const LABELS = {
   en: {
@@ -51,10 +52,10 @@ export default function EquipmentDetail({ language = 'en' }) {
   const [notice, setNotice] = useState('');
   const userId = currentUserId();
 
-  async function loadReviews() {
+  const loadReviews = useCallback(async () => {
     const { data } = await axios.get(`${API_BASE}/reviews/equipment/${id}?page=1&limit=50`);
     setReviews(data);
-  }
+  }, [id]);
 
   useEffect(() => {
     let active = true;
@@ -75,7 +76,7 @@ export default function EquipmentDetail({ language = 'en' }) {
     }
     load();
     return () => { active = false; };
-  }, [id, t.missing]);
+  }, [id, loadReviews, t.missing]);
 
   async function submitReview(event) {
     event.preventDefault();

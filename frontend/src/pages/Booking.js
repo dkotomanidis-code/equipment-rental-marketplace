@@ -32,7 +32,7 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess }) 
         amount: totalPrice,
         currency: 'usd',
       });
-      const { clientSecret, paymentId } = intentRes.data;
+      const { clientSecret } = intentRes.data;
 
       // Step 2: Confirm card payment with Stripe
       const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {

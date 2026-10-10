@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE, authConfig } from '../utils/api';
+import '../styles/Features.css';
 
 const LABELS = {
   en: { title: 'Notifications', loading: 'Loading notifications…', empty: 'You have no notifications.', error: 'Could not load notifications.', readAll: 'Mark all as read' },

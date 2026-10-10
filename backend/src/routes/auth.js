@@ -158,9 +158,11 @@ router.post(
 router.post(
   '/login',
   asyncRoute(async (req, res) => {
-    const { username, password } = req.body || {};
+    const { password } = req.body || {};
+    const username = req.body?.username ?? req.body?.email;
 
-    if (!validText(username, 255) || !validPassword(password)) {
+    if (!validText(username, 255) || typeof password !== 'string' ||
+        !password || Buffer.byteLength(password, 'utf8') > 72) {
       return res.status(400).json({
         error: 'Username and password are required',
       });
@@ -263,7 +265,7 @@ router.get(
     }
 
     const [rows] = await pool.execute(
-      'SELECT id, username, email, first_name, last_name, phone, bio, is_renter, is_owner, created_at FROM users WHERE id = ?',
+      'SELECT id, username, first_name, last_name, profile_picture, bio, is_renter, is_owner, created_at FROM users WHERE id = ?',
       [userId]
     );
 

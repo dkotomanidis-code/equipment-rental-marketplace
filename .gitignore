@@ -8,6 +8,7 @@ node_modules/
 
 # Production
 /build
+/frontend/build/
 /dist
 
 # Misc

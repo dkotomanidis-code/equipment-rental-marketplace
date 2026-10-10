@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE, authConfig } from '../utils/api';
+import '../styles/Features.css';
 
 const LABELS = {
   en: { title: 'Your wishlist', loading: 'Loading wishlist…', empty: 'Your wishlist is empty.', browse: 'Browse equipment', remove: 'Remove', previous: 'Previous', next: 'Next', error: 'Could not load your wishlist.' },
