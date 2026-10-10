@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const { rateLimit } = require('express-rate-limit');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -13,6 +14,14 @@ const app = express();
 
 // Middleware
 app.use(cors());
+const rateLimitOptions = {
+  windowMs: 15 * 60 * 1000,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+};
+app.use('/api', rateLimit({ ...rateLimitOptions, limit: 300 }));
+app.use('/api/auth', rateLimit({ ...rateLimitOptions, limit: 20 }));
 app.use(express.json());
 
 // Routes

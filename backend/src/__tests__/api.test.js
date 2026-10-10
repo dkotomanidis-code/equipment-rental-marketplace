@@ -375,3 +375,18 @@ describe('date and price boundaries', () => {
     process.env.JWT_SECRET = secret;
   });
 });
+
+describe('rate limiting', () => {
+  test('excess login requests return 429 before accessing the database', async () => {
+    pool.execute.mockResolvedValue([[]]);
+    const statuses = [];
+    for (let i = 0; i < 30; i++) {
+      statuses.push((await request('POST', '/auth/login', {
+        email: user.email, password: 'wrong',
+      })).status);
+    }
+    expect(statuses).toContain(401);
+    expect(statuses[statuses.length - 1]).toBe(429);
+    expect(pool.execute.mock.calls.length).toBeLessThan(30);
+  });
+});
