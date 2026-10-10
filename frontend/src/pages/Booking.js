@@ -50,7 +50,7 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess, on
     setLoading(true);
     onBusy(true);
     try {
-      const refund = await refundCheckout(paidPaymentId);
+      const refund = await refundCheckout(paidPaymentId, stripe);
       setError(refund.status === 'succeeded'
         ? 'Your payment was refunded. Start a new booking when ready.'
         : refund.status === 'not_charged' ? 'No payment was taken. You can try again.'
@@ -113,7 +113,7 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess, on
         <div role="alert">
           <p>Payment needs reconciliation. Check your dashboard before requesting a refund. Reference: {paidPaymentId}</p>
           <button type="button" className="btn btn-secondary" disabled={loading} onClick={handleRefund}>
-            Refund / Check Refund
+            Resolve Payment / Refund
           </button>
         </div>
       )}

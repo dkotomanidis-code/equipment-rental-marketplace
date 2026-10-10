@@ -81,3 +81,17 @@ test('unknown Stripe network errors persist recovery before enabling another cha
   expect(JSON.parse(sessionStorage.getItem('marketplaceCheckoutRecovery')).paymentId).toBe('pi_test');
   await expect(checkout({ ...args, stripe })).rejects.toThrow('previous payment');
 });
+test('interrupted card authentication resumes the existing intent before refunding', async () => {
+  sessionStorage.setItem('marketplaceCheckoutRecovery', JSON.stringify({
+    paymentId: 'pi_test', clientSecret: 'test-secret',
+  }));
+  axios.get.mockResolvedValueOnce({ data: { status: 'pending' } });
+  axios.post.mockResolvedValueOnce({ data: { status: 'requires_action' } })
+    .mockResolvedValueOnce({ data: { status: 'succeeded' } })
+    .mockResolvedValueOnce({ data: { status: 'succeeded' } });
+  const stripe = { confirmCardPayment: jest.fn().mockResolvedValue({ paymentIntent: { status: 'succeeded' } }) };
+  expect(await refundCheckout('pi_test', stripe)).toEqual({ status: 'succeeded' });
+  expect(stripe.confirmCardPayment).toHaveBeenCalledWith('test-secret');
+  expect(axios.post.mock.calls.every(([url]) => !url.includes('create-intent'))).toBe(true);
+  expect(sessionStorage.getItem('marketplaceCheckoutRecovery')).toBeNull();
+});

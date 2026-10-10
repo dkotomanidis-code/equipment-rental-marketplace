@@ -16,7 +16,7 @@ export async function checkout({ equipment, startDate, endDate, totalPrice, stri
     amount: totalPrice, currency: 'usd',
   }, config);
   const paymentId = intent.paymentId;
-  sessionStorage.setItem(recoveryKey, JSON.stringify({ paymentId }));
+  sessionStorage.setItem(recoveryKey, JSON.stringify({ paymentId, clientSecret: intent.clientSecret }));
   // Save before contacting Stripe; network errors must not enable a second charge.
   try {
     const result = await stripe.confirmCardPayment(intent.clientSecret, {
@@ -48,7 +48,7 @@ export async function checkout({ equipment, startDate, endDate, totalPrice, stri
   }
 }
 
-export async function refundCheckout(paymentId) {
+export async function refundCheckout(paymentId, stripe) {
   const token = localStorage.getItem('token');
   if (!token) throw new Error('Please log in to refund this payment.');
   const config = { headers: { Authorization: ['Bearer', token].join(' ') } };
@@ -59,9 +59,20 @@ export async function refundCheckout(paymentId) {
     return { status: 'succeeded' };
   }
   if (!['completed', 'succeeded', 'refund_pending', 'refund_failed'].includes(payment.status)) {
-    const { data: confirmation } = await axios.post(`${base}/payments/confirm`, {
+    let { data: confirmation } = await axios.post(`${base}/payments/confirm`, {
       paymentIntentId: paymentId,
     }, config);
+    if (['requires_action', 'requires_confirmation'].includes(confirmation.status)) {
+      const recovery = pendingCheckout();
+      if (!stripe || recovery?.paymentId !== paymentId || !recovery.clientSecret) {
+        throw new Error('Load the payment form to resume card authentication.');
+      }
+      const result = await stripe.confirmCardPayment(recovery.clientSecret);
+      if (result.error) throw new Error(result.error.message);
+      ({ data: confirmation } = await axios.post(`${base}/payments/confirm`, {
+        paymentIntentId: paymentId,
+      }, config));
+    }
     if (['requires_payment_method', 'canceled'].includes(confirmation.status)) {
       sessionStorage.removeItem(recoveryKey);
       return { status: 'not_charged' };
