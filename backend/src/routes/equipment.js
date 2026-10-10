@@ -45,6 +45,15 @@ router.get('/', asyncRoute(async (req, res) => {
   res.json(rows.map(equipmentResponse));
 }));
 
+// Get the authenticated user's listings. Keep this before the /:id route.
+router.get('/my-equipment', authenticate, asyncRoute(async (req, res) => {
+  const [rows] = await pool.execute(
+    `SELECT ${equipmentColumns} FROM equipment WHERE owner_id = ? ORDER BY id DESC`,
+    [req.user.id]
+  );
+  res.json(rows.map(equipmentResponse));
+}));
+
 router.param('id', (req, res, next, id) => {
   if (!validId(id)) return res.status(400).json({ error: 'Invalid equipment ID' });
   next();
