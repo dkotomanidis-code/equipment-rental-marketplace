@@ -16,7 +16,7 @@ export async function checkout({ equipment, startDate, endDate, totalPrice, stri
     amount: totalPrice, currency: 'usd',
   }, config);
   const paymentId = intent.paymentId;
-  sessionStorage.setItem(recoveryKey, JSON.stringify({ paymentId, clientSecret: intent.clientSecret }));
+  sessionStorage.setItem(recoveryKey, JSON.stringify({ paymentId }));
   // Save before contacting Stripe; network errors must not enable a second charge.
   try {
     const result = await stripe.confirmCardPayment(intent.clientSecret, {
@@ -64,10 +64,11 @@ export async function refundCheckout(paymentId, stripe) {
     }, config);
     if (['requires_action', 'requires_confirmation'].includes(confirmation.status)) {
       const recovery = pendingCheckout();
-      if (!stripe || recovery?.paymentId !== paymentId || !recovery.clientSecret) {
+      if (!stripe || recovery?.paymentId !== paymentId) {
         throw new Error('Load the payment form to resume card authentication.');
       }
-      const result = await stripe.confirmCardPayment(recovery.clientSecret);
+      const { data: authentication } = await axios.get(`${base}/payments/${paymentId}/authentication`, config);
+      const result = await stripe.confirmCardPayment(authentication.clientSecret);
       if (result.error) throw new Error(result.error.message);
       ({ data: confirmation } = await axios.post(`${base}/payments/confirm`, {
         paymentIntentId: paymentId,

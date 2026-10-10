@@ -159,6 +159,21 @@ router.post('/refund', asyncRoute(async (req, res) => {
   });
 }));
 
+router.get('/:paymentId/authentication', asyncRoute(async (req, res) => {
+  const payment = await ownPayment(req.params.paymentId, req.user.id);
+  if (!payment) return res.status(404).json({ error: 'Payment not found' });
+  if (['refunded', 'refund_pending', 'refund_failed'].includes(payment.status)) {
+    return res.status(409).json({ error: 'Payment has a refund operation' });
+  }
+  const intent = await stripe.paymentIntents.retrieve(req.params.paymentId);
+  if (intent.metadata.renterId !== String(req.user.id) ||
+      !['requires_action', 'requires_confirmation'].includes(intent.status)) {
+    return res.status(409).json({ error: 'Payment does not require authentication' });
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json({ clientSecret: intent.client_secret });
+}));
+
 router.get('/:paymentId', asyncRoute(async (req, res) => {
   const payment = await ownPayment(req.params.paymentId, req.user.id);
   if (!payment) return res.status(404).json({ error: 'Payment not found' });

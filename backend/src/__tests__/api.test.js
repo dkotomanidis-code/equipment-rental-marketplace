@@ -323,6 +323,20 @@ describe('bookings', () => {
 
 describe('payment verification', () => {
   const payment = { paymentId: 'pi_test', amount: 24.68, currency: 'usd', status: 'pending' };
+  test('authentication recovery only returns the owning renter intent and forbids caching', async () => {
+    pool.execute.mockResolvedValueOnce([[payment]]);
+    stripe.paymentIntents.retrieve.mockResolvedValue({
+      status: 'requires_action', metadata: { renterId: '2' }, client_secret: 'test-secret',
+    });
+    const result = await asUser('GET', '/payments/pi_test/authentication');
+    expect(result).toEqual({ status: 200, body: { clientSecret: 'test-secret' } });
+    expect(pool.execute.mock.calls[0][1]).toEqual(['pi_test', 2]);
+  });
+  test('authentication recovery never exposes another users payment', async () => {
+    pool.execute.mockResolvedValueOnce([[]]);
+    expect((await asUser('GET', '/payments/pi_test/authentication')).status).toBe(404);
+    expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled();
+  });
   test('create-intent persists payer identity and preserves response fields', async () => {
     stripe.paymentIntents.create.mockResolvedValue({ id: 'pi_test', client_secret: 'test-client-secret' });
     pool.execute.mockResolvedValue([{ insertId: 1 }]);

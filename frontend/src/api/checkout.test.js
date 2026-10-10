@@ -83,9 +83,10 @@ test('unknown Stripe network errors persist recovery before enabling another cha
 });
 test('interrupted card authentication resumes the existing intent before refunding', async () => {
   sessionStorage.setItem('marketplaceCheckoutRecovery', JSON.stringify({
-    paymentId: 'pi_test', clientSecret: 'test-secret',
+    paymentId: 'pi_test',
   }));
-  axios.get.mockResolvedValueOnce({ data: { status: 'pending' } });
+  axios.get.mockResolvedValueOnce({ data: { status: 'pending' } })
+    .mockResolvedValueOnce({ data: { clientSecret: 'test-secret' } });
   axios.post.mockResolvedValueOnce({ data: { status: 'requires_action' } })
     .mockResolvedValueOnce({ data: { status: 'succeeded' } })
     .mockResolvedValueOnce({ data: { status: 'succeeded' } });
