@@ -1,7 +1,8 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const pool = require('../database/db');
 const { authenticate } = require('../middleware/auth');
+const { asyncRoute } = require('../utils/api');
 const {
   generateRecoveryCodes,
   hashRecoveryCode,
@@ -11,243 +12,295 @@ const {
 
 const router = express.Router();
 
-/**
- * POST /api/recovery/generate
- * Generate recovery codes for the authenticated user.
- */
-router.post('/generate', authenticate, async (req, res) => {
-  const userId = req.user?.id;
-
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  let connection;
-
-  try {
-    connection = await pool.getConnection();
-
-    const [users] = await connection.execute(
-      'SELECT id FROM users WHERE id = ?',
-      [userId]
-    );
-
-    if (users.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const plainCodes = generateRecoveryCodes(10);
-    const expiresAt = new Date();
-    expiresAt.setFullYear(expiresAt.getFullYear() + 10);
-
-    for (const code of plainCodes) {
-      await connection.execute(
-        `INSERT INTO recovery_codes (user_id, code_hash, used, created_at, expires_at)
-         VALUES (?, ?, false, NOW(), ?)`,
-        [userId, hashRecoveryCode(code), expiresAt]
-      );
-    }
-
-    return res.json({
-      codes: plainCodes,
-      message: 'Recovery codes generated. Save them in a safe place. Each code can be used once.',
-    });
-  } catch (error) {
-    console.error('Generate recovery codes error:', error);
-    return res.status(500).json({ error: 'Code generation failed' });
-  } finally {
-    if (connection) connection.release();
-  }
+const invalidCode = () => ({
+  status: 401,
+  body: {
+    error: 'Invalid, expired, or already-used recovery code',
+  },
 });
 
-/**
- * POST /api/recovery/reset-password
- * Reset a password using a valid recovery code.
- */
-router.post('/reset-password', async (req, res) => {
-  const { email, recoveryCode, newPassword, newPasswordConfirm } = req.body;
+function validPassword(value) {
+  return (
+    typeof value === 'string' &&
+    value.length >= 8 &&
+    Buffer.byteLength(value, 'utf8') <= 72
+  );
+}
 
-  if (!email || !recoveryCode || !newPassword || !newPasswordConfirm) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  if (newPassword !== newPasswordConfirm) {
-    return res.status(400).json({ error: 'Passwords do not match' });
-  }
-
-  if (newPassword.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  }
-
-  let connection;
+async function transaction(work) {
+  const connection = await pool.getConnection();
 
   try {
-    connection = await pool.getConnection();
-
-    const [users] = await connection.execute(
-      'SELECT id, email FROM users WHERE email = ?',
-      [email.trim().toLowerCase()]
-    );
-
-    if (users.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+    await connection.beginTransaction();
+    const result = await work(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      console.error('Recovery transaction rollback failed');
     }
 
-    const userId = users[0].id;
-    const normalizedCode = normalizeRecoveryCode(recoveryCode);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
 
-    const [codes] = await connection.execute(
-      `SELECT id, code_hash
-       FROM recovery_codes
-       WHERE user_id = ? AND used = false
-       ORDER BY created_at DESC`,
-      [userId]
+function sendResult(res, result) {
+  res.set('Cache-Control', 'no-store');
+  return res.status(result.status).json(result.body);
+}
+
+async function insertCodes(connection, userId) {
+  const codes = generateRecoveryCodes(10);
+
+  for (const code of codes) {
+    await connection.execute(
+      `INSERT INTO recovery_codes
+         (user_id, code_hash, used, created_at, expires_at)
+       VALUES (?, ?, false, NOW(), DATE_ADD(NOW(), INTERVAL 10 YEAR))`,
+      [userId, hashRecoveryCode(code)]
+    );
+  }
+
+  return codes;
+}
+
+async function issueCodes(req, res, replaceExisting) {
+  const { password } = req.body || {};
+
+  if (
+    typeof password !== 'string' ||
+    !password ||
+    Buffer.byteLength(password, 'utf8') > 72
+  ) {
+    return res.status(400).json({
+      error: 'Current password confirmation is required',
+    });
+  }
+
+  const result = await transaction(async (connection) => {
+    // All recovery-changing operations lock the user first.
+    const [users] = await connection.execute(
+      'SELECT id, password FROM users WHERE id = ? FOR UPDATE',
+      [req.user.id]
     );
 
-    let match = null;
+    if (!users.length) {
+      return {
+        status: 401,
+        body: { error: 'Invalid account or password' },
+      };
+    }
 
-    for (const record of codes) {
-      if (verifyRecoveryCode(normalizedCode, record.code_hash)) {
-        match = record;
-        break;
+    const user = users[0];
+
+    if (!(await bcrypt.compare(password, user.password))) {
+      return {
+        status: 401,
+        body: { error: 'Invalid account or password' },
+      };
+    }
+
+    if (!replaceExisting) {
+      const [activeCodes] = await connection.execute(
+        `SELECT id
+         FROM recovery_codes
+         WHERE user_id = ?
+           AND used = false
+           AND expires_at > NOW()
+         LIMIT 1
+         FOR UPDATE`,
+        [user.id]
+      );
+
+      if (activeCodes.length) {
+        return {
+          status: 409,
+          body: {
+            error: 'Active recovery codes already exist. Use regenerate to replace them.',
+          },
+        };
       }
     }
 
-    if (!match) {
-      return res.status(401).json({ error: 'Invalid or already-used recovery code' });
+    // Retire all remaining unused codes before issuing a new set.
+    await connection.execute(
+      `UPDATE recovery_codes
+       SET used = true, used_at = NOW()
+       WHERE user_id = ? AND used = false`,
+      [user.id]
+    );
+
+    const codes = await insertCodes(connection, user.id);
+
+    return {
+      status: 200,
+      body: {
+        codes,
+        message: 'Save these recovery codes safely. Previous codes are no longer valid.',
+      },
+    };
+  });
+
+  return sendResult(res, result);
+}
+
+router.post(
+  '/generate',
+  authenticate,
+  asyncRoute((req, res) => issueCodes(req, res, false))
+);
+
+router.post(
+  '/regenerate',
+  authenticate,
+  asyncRoute((req, res) => issueCodes(req, res, true))
+);
+
+router.post(
+  '/reset-password',
+  asyncRoute(async (req, res) => {
+    const {
+      email,
+      recoveryCode,
+      newPassword,
+      newPasswordConfirm,
+    } = req.body || {};
+
+    if (
+      typeof email !== 'string' ||
+      !email.trim() ||
+      email.trim().length > 255 ||
+      typeof recoveryCode !== 'string' ||
+      recoveryCode.length > 128
+    ) {
+      return res.status(400).json({
+        error: 'A valid email and recovery code are required',
+      });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    if (!validPassword(newPassword)) {
+      return res.status(400).json({
+        error: 'Password must be at least 8 characters and no more than 72 UTF-8 bytes',
+      });
+    }
 
-    await connection.execute(
-      'UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?',
-      [hashedPassword, userId]
-    );
+    if (
+      typeof newPasswordConfirm !== 'string' ||
+      newPassword !== newPasswordConfirm
+    ) {
+      return res.status(400).json({
+        error: 'Passwords do not match',
+      });
+    }
 
-    await connection.execute(
-      'UPDATE recovery_codes SET used = true, used_at = NOW() WHERE id = ?',
-      [match.id]
-    );
+    const normalizedCode = normalizeRecoveryCode(recoveryCode);
 
-    return res.json({
-      message: 'Password reset successfully',
-      user: {
-        id: userId,
-        email: users[0].email,
-      },
+    if (!/^[A-F0-9]{8}$/.test(normalizedCode)) {
+      return sendResult(res, invalidCode());
+    }
+
+    const result = await transaction(async (connection) => {
+      const [users] = await connection.execute(
+        'SELECT id, email FROM users WHERE email = ? FOR UPDATE',
+        [email.trim().toLowerCase()]
+      );
+
+      // Do not reveal whether this email has an account.
+      if (!users.length) {
+        return invalidCode();
+      }
+
+      const user = users[0];
+
+      const [codes] = await connection.execute(
+        `SELECT id, code_hash
+         FROM recovery_codes
+         WHERE user_id = ?
+           AND used = false
+           AND expires_at > NOW()
+         FOR UPDATE`,
+        [user.id]
+      );
+
+      const match = codes.find((record) =>
+        verifyRecoveryCode(normalizedCode, record.code_hash)
+      );
+
+      if (!match) {
+        return invalidCode();
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      const [consumed] = await connection.execute(
+        `UPDATE recovery_codes
+         SET used = true, used_at = NOW()
+         WHERE id = ?
+           AND user_id = ?
+           AND used = false
+           AND expires_at > NOW()`,
+        [match.id, user.id]
+      );
+
+      if (consumed.affectedRows !== 1) {
+        return invalidCode();
+      }
+
+      await connection.execute(
+        'UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?',
+        [hashedPassword, user.id]
+      );
+
+      return {
+        status: 200,
+        body: {
+          message: 'Password reset successfully',
+          user: {
+            id: user.id,
+            email: user.email,
+          },
+        },
+      };
     });
-  } catch (error) {
-    console.error('Password reset error:', error);
-    return res.status(500).json({ error: 'Password reset failed' });
-  } finally {
-    if (connection) connection.release();
-  }
-});
 
-/**
- * GET /api/recovery/codes
- * Returns the recovery codes state for the current user.
- */
-router.get('/codes', authenticate, async (req, res) => {
-  const userId = req.user?.id;
+    return sendResult(res, result);
+  })
+);
 
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  let connection;
-
-  try {
-    connection = await pool.getConnection();
-
-    const [codes] = await connection.execute(
-      `SELECT id, used, used_at, created_at, expires_at
+router.get(
+  '/codes',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    const [rows] = await pool.execute(
+      `SELECT id, used, used_at, created_at, expires_at,
+              (used = false AND expires_at > NOW()) AS usable
        FROM recovery_codes
        WHERE user_id = ?
-       ORDER BY created_at DESC`,
-      [userId]
+       ORDER BY created_at DESC, id DESC`,
+      [req.user.id]
     );
 
-    const unused = codes.filter((code) => !code.used).length;
-    const used = codes.filter((code) => code.used).length;
+    const codes = rows.map((row) => ({
+      ...row,
+      used: Boolean(row.used),
+      usable: Boolean(row.usable),
+    }));
 
-    return res.json({
-      total: codes.length,
-      unused,
-      used,
-      codes,
+    return sendResult(res, {
+      status: 200,
+      body: {
+        total: codes.length,
+        unused: codes.filter((code) => code.usable).length,
+        used: codes.filter((code) => code.used).length,
+        expired: codes.filter((code) => !code.used && !code.usable).length,
+        codes,
+      },
     });
-  } catch (error) {
-    console.error('Get recovery codes error:', error);
-    return res.status(500).json({ error: 'Failed to fetch recovery codes' });
-  } finally {
-    if (connection) connection.release();
-  }
-});
-
-/**
- * POST /api/recovery/regenerate
- * Invalidates the old codes and creates a fresh set.
- */
-router.post('/regenerate', authenticate, async (req, res) => {
-  const userId = req.user?.id;
-  const { password } = req.body;
-
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  if (!password) {
-    return res.status(400).json({ error: 'Password confirmation is required' });
-  }
-
-  let connection;
-
-  try {
-    connection = await pool.getConnection();
-
-    const [users] = await connection.execute(
-      'SELECT password FROM users WHERE id = ?',
-      [userId]
-    );
-
-    if (users.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const passwordMatches = await bcrypt.compare(password, users[0].password);
-
-    if (!passwordMatches) {
-      return res.status(401).json({ error: 'Invalid password' });
-    }
-
-    await connection.execute(
-      'UPDATE recovery_codes SET used = true, used_at = NOW() WHERE user_id = ?',
-      [userId]
-    );
-
-    const plainCodes = generateRecoveryCodes(10);
-    const expiresAt = new Date();
-    expiresAt.setFullYear(expiresAt.getFullYear() + 10);
-
-    for (const code of plainCodes) {
-      await connection.execute(
-        `INSERT INTO recovery_codes (user_id, code_hash, used, created_at, expires_at)
-         VALUES (?, ?, false, NOW(), ?)`,
-        [userId, hashRecoveryCode(code), expiresAt]
-      );
-    }
-
-    return res.json({
-      codes: plainCodes,
-      message: 'New recovery codes generated. Old codes are no longer valid.',
-    });
-  } catch (error) {
-    console.error('Regenerate recovery codes error:', error);
-    return res.status(500).json({ error: 'Code regeneration failed' });
-  } finally {
-    if (connection) connection.release();
-  }
-});
+  })
+);
 
 module.exports = router;
