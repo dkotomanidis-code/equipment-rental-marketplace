@@ -9,24 +9,23 @@ function Equipment() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let active = true;
-    const fetchEquipment = async () => {
+    fetchEquipment();
+  }, [searchTerm, category]);
+
+  const fetchEquipment = async () => {
     try {
       const params = {};
       if (searchTerm) params.search = searchTerm;
       if (category) params.category = category;
 
       const response = await axios.get(`${process.env.REACT_APP_API_URL}/equipment`, { params });
-      if (active) setEquipment(response.data);
+      setEquipment(response.data);
     } catch (error) {
       console.error('Error fetching equipment:', error);
     } finally {
-      if (active) setLoading(false);
+      setLoading(false);
     }
-    };
-    fetchEquipment();
-    return () => { active = false; };
-  }, [searchTerm, category]);
+  };
 
   return (
     <div className="equipment-page">
