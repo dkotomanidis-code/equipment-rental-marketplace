@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { checkout, refundCheckout, pendingCheckout } from '../api/checkout';
 
 const stripePromise = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY)
@@ -10,62 +11,59 @@ const stripePromise = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY
 
 const PLATFORM_COMMISSION_RATE = 0.05;
 
-function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess }) {
+function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess, onBusy, onPending }) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paidPaymentId, setPaidPaymentId] = useState(() => pendingCheckout()?.paymentId || null);
 
   const commission = totalPrice * PLATFORM_COMMISSION_RATE;
   const ownerAmount = totalPrice - commission;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || loading || paidPaymentId) return;
 
     setLoading(true);
+    onBusy(true);
     setError('');
 
     try {
-      // Step 1: Create payment intent
-      const intentRes = await axios.post(`${process.env.REACT_APP_API_URL}/payments/create-intent`, {
-        amount: totalPrice,
-        currency: 'usd',
+      const result = await checkout({
+        equipment, startDate, endDate, totalPrice, stripe, card: elements.getElement(CardElement),
       });
-      const { clientSecret, paymentId } = intentRes.data;
-
-      // Step 2: Confirm card payment with Stripe
-      const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card: elements.getElement(CardElement),
-        },
-      });
-
-      if (stripeError) {
-        setError(stripeError.message);
-        setLoading(false);
-        return;
-      }
-
-      // Step 3: Confirm payment on the backend
-      await axios.post(`${process.env.REACT_APP_API_URL}/payments/confirm`, {
-        paymentIntentId: paymentIntent.id,
-      });
-
-      // Step 4: Create booking record only after payment is confirmed
-      const bookingRes = await axios.post(`${process.env.REACT_APP_API_URL}/bookings`, {
-        equipmentId: equipment.id,
-        startDate,
-        endDate,
-        totalPrice,
-        paymentId: paymentIntent.id,
-      });
-
-      onSuccess({ booking: bookingRes.data, paymentId: paymentIntent.id });
+      onSuccess(result);
     } catch (err) {
+      if (err.paidPaymentId) {
+        setPaidPaymentId(err.paidPaymentId);
+        onPending(true);
+      }
       setError(err.response?.data?.error || err.message || 'Payment failed. Please try again.');
     } finally {
       setLoading(false);
+      onBusy(false);
+    }
+  };
+
+  const handleRefund = async () => {
+    setLoading(true);
+    onBusy(true);
+    try {
+      const refund = await refundCheckout(paidPaymentId);
+      setError(refund.status === 'succeeded'
+        ? 'Your payment was refunded. Start a new booking when ready.'
+        : refund.status === 'not_charged' ? 'No payment was taken. You can try again.'
+        : `Refund status: ${refund.status}. Use this button again to check it.`);
+      if (['succeeded', 'not_charged'].includes(refund.status)) {
+        setPaidPaymentId(null);
+        onPending(false);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Could not reconcile the refund. Please try again.');
+    } finally {
+      setLoading(false);
+      onBusy(false);
     }
   };
 
@@ -111,7 +109,15 @@ function CheckoutForm({ equipment, startDate, endDate, totalPrice, onSuccess }) 
 
       {error && <p className="error">{error}</p>}
 
-      <button type="submit" className="btn btn-primary pay-btn" disabled={!stripe || loading}>
+      {paidPaymentId && (
+        <div role="alert">
+          <p>Payment needs reconciliation. Check your dashboard before requesting a refund. Reference: {paidPaymentId}</p>
+          <button type="button" className="btn btn-secondary" disabled={loading} onClick={handleRefund}>
+            Refund / Check Refund
+          </button>
+        </div>
+      )}
+      <button type="submit" className="btn btn-primary pay-btn" disabled={!stripe || loading || !!paidPaymentId}>
         {loading ? 'Processing...' : `Pay $${totalPrice.toFixed(2)}`}
       </button>
 
@@ -131,6 +137,8 @@ function Booking() {
   const [rentalDays, setRentalDays] = useState(0);
   const [error, setError] = useState('');
   const [step, setStep] = useState('dates'); // 'dates' | 'payment'
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [hasPendingPayment, setHasPendingPayment] = useState(() => !!pendingCheckout());
 
   useEffect(() => {
     const fetchEquipment = async () => {
@@ -255,6 +263,7 @@ function Booking() {
             <div className="payment-step">
               <button
                 className="back-btn"
+                disabled={checkoutBusy || hasPendingPayment}
                 onClick={() => setStep('dates')}
               >
                 ← Back to Dates
@@ -272,6 +281,8 @@ function Booking() {
                     endDate={endDate}
                     totalPrice={totalPrice}
                     onSuccess={handlePaymentSuccess}
+                    onBusy={setCheckoutBusy}
+                    onPending={setHasPendingPayment}
                   />
                 </Elements>
               ) : (

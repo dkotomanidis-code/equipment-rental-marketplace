@@ -7,21 +7,20 @@ function Dashboard() {
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    if (token) {
-      fetchBookings();
-    }
-  }, [token]);
-
-  const fetchBookings = async () => {
+    let active = true;
+    const fetchBookings = async () => {
     try {
       const response = await axios.get(`${process.env.REACT_APP_API_URL}/bookings/my-bookings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setBookings(response.data);
+      if (active) setBookings(response.data);
     } catch (error) {
       console.error('Error fetching bookings:', error);
     }
-  };
+    };
+    if (token) fetchBookings();
+    return () => { active = false; };
+  }, [token]);
 
   return (
     <div className="dashboard">
