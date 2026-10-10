@@ -251,7 +251,7 @@ router.post(
       }
 
       await connection.execute(
-        'UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?',
+        'UPDATE users SET password = ?, token_version = token_version + 1, updated_at = NOW() WHERE id = ?',
         [hashedPassword, user.id]
       );
 

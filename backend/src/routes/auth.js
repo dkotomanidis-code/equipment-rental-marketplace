@@ -105,6 +105,7 @@ router.post(
         id: result.insertId,
         username: normalizedUsername,
         email: normalizedEmail,
+	token_version: 0,
       };
 
       for (const code of codes) {
