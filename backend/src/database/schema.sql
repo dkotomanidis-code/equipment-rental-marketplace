@@ -37,6 +37,7 @@ CREATE TABLE equipment (
 CREATE TABLE payments (
   id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   payment_id VARCHAR(255) UNIQUE NOT NULL,
+  refund_id VARCHAR(255) UNIQUE,
   user_id INT NOT NULL,
   booking_id INTEGER,
   amount DECIMAL(10, 2) NOT NULL,

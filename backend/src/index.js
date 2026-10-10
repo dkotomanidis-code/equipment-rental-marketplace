@@ -22,6 +22,7 @@ const rateLimitOptions = {
 };
 app.use('/api', rateLimit({ ...rateLimitOptions, limit: 300 }));
 app.use('/api/auth', rateLimit({ ...rateLimitOptions, limit: 20 }));
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), paymentRoutes.webhook);
 app.use(express.json());
 
 // Routes

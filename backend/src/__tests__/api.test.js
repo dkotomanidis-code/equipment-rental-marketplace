@@ -1,5 +1,6 @@
 process.env.JWT_SECRET = require('crypto').randomBytes(32).toString('hex');
 process.env.STRIPE_SECRET_KEY = 'test-placeholder';
+process.env.STRIPE_WEBHOOK_SECRET = require('crypto').randomBytes(32).toString('hex');
 
 jest.mock('../database/pool', () => ({
   execute: jest.fn(),
@@ -8,7 +9,8 @@ jest.mock('../database/pool', () => ({
 jest.mock('stripe', () => {
   const client = {
     paymentIntents: { create: jest.fn(), retrieve: jest.fn() },
-    refunds: { create: jest.fn() },
+    refunds: { create: jest.fn(), retrieve: jest.fn() },
+    webhooks: { constructEvent: jest.fn() },
   };
   return jest.fn(() => client);
 });
@@ -247,7 +249,8 @@ describe('bookings', () => {
     expect(connection.commit).not.toHaveBeenCalled();
   });
   test.each([
-    {}, { user_id: 3 }, { status: 'pending' }, { amount: 0.01 }, { booking_id: 7 },
+    {}, { user_id: 3 }, { status: 'pending' }, { status: 'refund_pending' },
+    { status: 'refund_failed' }, { amount: 0.01 }, { booking_id: 7 },
   ])('unverified, foreign, underpaid or reused payments cannot create paid bookings', async (change) => {
     const payment = { user_id: 2, status: 'succeeded', amount: 24.68, booking_id: null, ...change };
     if (Object.keys(change).length === 0) payment.status = 'pending';
@@ -299,6 +302,10 @@ describe('bookings', () => {
     connection.execute.mockResolvedValueOnce([[{ ...booking, paymentStatus: 'paid' }]]);
     expect((await asUser('DELETE', '/bookings/8')).status).toBe(409);
   });
+  test('bookings awaiting refunds cannot be deleted', async () => {
+    connection.execute.mockResolvedValueOnce([[{ ...booking, status: 'cancelled', paymentStatus: 'refund_pending' }]]);
+    expect((await asUser('DELETE', '/bookings/8')).status).toBe(409);
+  });
   test('database errors roll back and release without exposing details', async () => {
     const log = jest.spyOn(console, 'error').mockImplementation(() => {});
     connection.execute.mockRejectedValue(new Error('private database details'));
@@ -337,6 +344,11 @@ describe('payment verification', () => {
     expect((await asUser('POST', '/payments/confirm', { paymentIntentId: 'pi_test' })).status).toBe(409);
     expect(pool.execute).toHaveBeenCalledTimes(1);
   });
+  test.each(['refund_pending', 'refund_failed', 'refunded'])('confirm never restores %s payments', async (status) => {
+    pool.execute.mockResolvedValueOnce([[{ ...payment, status }]]);
+    expect((await asUser('POST', '/payments/confirm', { paymentIntentId: 'pi_test' })).status).toBe(409);
+    expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled();
+  });
   test('another user cannot confirm payment', async () => {
     pool.execute.mockResolvedValueOnce([[]]);
     expect((await asUser('POST', '/payments/confirm', { paymentIntentId: 'pi_test' })).status).toBe(404);
@@ -357,6 +369,70 @@ describe('payment verification', () => {
     expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(409);
     expect(stripe.refunds.create).not.toHaveBeenCalled();
   });
+  test('pending refunds are persisted as non-spendable rather than rolled back', async () => {
+    connection.execute.mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[{ status: 'succeeded', refund_id: null }]])
+      .mockResolvedValue([{ affectedRows: 1 }]);
+    stripe.refunds.create.mockResolvedValue({ id: 're_test', status: 'pending', amount: 2468 });
+    expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(202);
+    expect(connection.execute.mock.calls[2][1]).toEqual(['re_test', 'refund_pending', 'pi_test']);
+    expect(connection.commit).toHaveBeenCalled();
+  });
+  test('pending refund can be reconciled by retrieving it without creating another refund', async () => {
+    connection.execute.mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[{ status: 'refund_pending', refund_id: 're_test' }]])
+      .mockResolvedValue([{ affectedRows: 1 }]);
+    stripe.refunds.retrieve.mockResolvedValue({ id: 're_test', status: 'succeeded', amount: 2468 });
+    expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(200);
+    expect(stripe.refunds.create).not.toHaveBeenCalled();
+    expect(connection.execute.mock.calls[2][1]).toEqual(['re_test', 'refunded', 'pi_test']);
+  });
+  test('checkout floating-point totals are normalized to cents', async () => {
+    stripe.paymentIntents.create.mockResolvedValue({ id: 'pi_test', client_secret: 'test-client-secret' });
+    pool.execute.mockResolvedValue([{ insertId: 1 }]);
+    expect((await asUser('POST', '/payments/create-intent', { amount: 3 * 12.34 })).body.amount).toBe(37.02);
+    expect(stripe.paymentIntents.create.mock.calls[0][0].amount).toBe(3702);
+  });
+});
+
+describe('refund webhooks', () => {
+  const realStripe = jest.requireActual('stripe')('test-placeholder');
+  async function webhook(status, validSignature = true) {
+    const payload = JSON.stringify({
+      id: 'evt_test', type: 'refund.updated',
+      data: { object: { id: 're_test', payment_intent: 'pi_test', amount: 2468, status } },
+    });
+    const signature = realStripe.webhooks.generateTestHeaderString({
+      payload, secret: validSignature ? process.env.STRIPE_WEBHOOK_SECRET : 'wrong-secret',
+    });
+    stripe.webhooks.constructEvent.mockImplementation(realStripe.webhooks.constructEvent.bind(realStripe.webhooks));
+    const result = await fetch(`${base}/payments/webhook`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': signature },
+      body: payload,
+    });
+    return { status: result.status, body: await result.json() };
+  }
+  test.each([
+    ['succeeded', 'refunded', 'refunded'], ['failed', 'refund_failed', 'paid'],
+  ])('signed %s refund event reconciles payment and booking', async (refundStatus, status, paymentStatus) => {
+    connection.execute.mockResolvedValueOnce([[{ id: 8 }]])
+      .mockResolvedValueOnce([[{ amount: 24.68 }]])
+      .mockResolvedValue([{ affectedRows: 1 }]);
+    expect((await webhook(refundStatus)).status).toBe(200);
+    expect(Buffer.isBuffer(stripe.webhooks.constructEvent.mock.calls[0][0])).toBe(true);
+    expect(connection.execute.mock.calls[2][1]).toEqual([status, 'pi_test']);
+    expect(connection.execute.mock.calls[3][1]).toEqual([paymentStatus, 'pi_test']);
+    expect(connection.commit).toHaveBeenCalled();
+  });
+  test('forged signatures cannot access the database', async () => {
+    expect((await webhook('succeeded', false)).status).toBe(400);
+    expect(pool.getConnection).not.toHaveBeenCalled();
+  });
+  test('duplicate or stale webhook does not alter a finalized payment', async () => {
+    connection.execute.mockResolvedValueOnce([[]]).mockResolvedValueOnce([[]]);
+    expect((await webhook('succeeded')).status).toBe(200);
+    expect(connection.execute).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('date and price boundaries', () => {
@@ -367,6 +443,9 @@ describe('date and price boundaries', () => {
     expect(priceCents('12.34')).toBe(1234);
     expect(priceCents('99999999.99')).toBe(9999999999);
     expect(priceCents('100000000')).toBeNull();
+    expect(priceCents(3 * 12.34)).toBe(3702);
+    expect(priceCents(1.234)).toBeNull();
+    expect(priceCents(Infinity)).toBeNull();
   });
   test('JWT configuration fails closed without a strong secret', () => {
     const secret = process.env.JWT_SECRET;

@@ -136,7 +136,7 @@ router.delete('/:id', asyncRoute(async (req, res) => {
     const booking = await findBooking(connection, req.params.id, true);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
     if (!participant(booking, req.user.id)) return res.status(403).json({ error: 'Access denied' });
-    if (booking.paymentStatus === 'paid' || !['pending', 'cancelled'].includes(booking.status)) {
+    if (!['unpaid', 'refunded'].includes(booking.paymentStatus) || !['pending', 'cancelled'].includes(booking.status)) {
       return res.status(409).json({ error: 'Only unpaid pending or cancelled bookings can be deleted' });
     }
     await connection.execute('DELETE FROM bookings WHERE id = ?', [req.params.id]);

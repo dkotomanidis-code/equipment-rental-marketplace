@@ -9,6 +9,13 @@ const validText = (value, max) => typeof value === 'string' &&
   value.trim().length > 0 && value.length <= max;
 
 function priceCents(value) {
+  if (typeof value === 'number') {
+    const scaled = value * 100;
+    const cents = Math.round(scaled);
+    const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled)) * 4;
+    return Number.isFinite(scaled) && Math.abs(scaled - cents) <= tolerance &&
+      cents > 0 && cents <= 9999999999 ? cents : null;
+  }
   if (!/^\d{1,8}(\.\d{1,2})?$/.test(String(value))) return null;
   const cents = Math.round(Number(value) * 100);
   return cents > 0 && cents <= 9999999999 ? cents : null;
