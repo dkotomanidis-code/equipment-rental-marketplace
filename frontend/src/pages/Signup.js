@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Auth.css';
 
-function Signup({ setIsLoggedIn }) {
+function Signup({ setIsLoggedIn, setUser }) {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -30,10 +30,16 @@ function Signup({ setIsLoggedIn }) {
   };
 
   const finishSignup = (result) => {
-    localStorage.setItem('token', result.token);
+    if (result.token) {
+      localStorage.setItem('token', result.token);
+    }
 
     if (result.user) {
       localStorage.setItem('user', JSON.stringify(result.user));
+    }
+
+    if (typeof setUser === 'function') {
+      setUser(result.user);
     }
 
     if (typeof setIsLoggedIn === 'function') {
@@ -67,45 +73,30 @@ function Signup({ setIsLoggedIn }) {
     setLoading(true);
 
     try {
-      const apiBase = (
-        process.env.REACT_APP_API_URL || '/api'
-      ).replace(/\/+$/, '');
+      const apiBase = (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
 
-      const response = await axios.post(
-        `${apiBase}/auth/signup`,
-        {
-          ...formData,
-          username: formData.username.trim(),
-          email: formData.email.trim(),
-          firstName: formData.firstName.trim(),
-          lastName: formData.lastName.trim(),
-        }
-      );
+      const response = await axios.post(`${apiBase}/auth/signup`, {
+        ...formData,
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+      });
 
       const result = response.data;
 
-      if (
-        typeof result.token !== 'string' ||
-        !result.token
-      ) {
-        setError(
-          'The server did not return a login token. Please try logging in.'
-        );
+      if (typeof result.token !== 'string' || !result.token) {
+        setError('The server did not return a login token. Please try logging in.');
         return;
       }
 
-      // Clear passwords after successful account creation.
       setFormData((previous) => ({
         ...previous,
         password: '',
         passwordConfirm: '',
       }));
 
-      if (
-        Array.isArray(result.recoveryCodes) &&
-        result.recoveryCodes.length > 0
-      ) {
-        // Keep recovery codes in component memory, not localStorage.
+      if (Array.isArray(result.recoveryCodes) && result.recoveryCodes.length > 0) {
         setSignupResult(result);
       } else {
         finishSignup(result);
@@ -114,9 +105,7 @@ function Signup({ setIsLoggedIn }) {
       const serverError = err.response?.data?.error;
 
       setError(
-        typeof serverError === 'string'
-          ? serverError
-          : 'Signup failed. Please try again.'
+        typeof serverError === 'string' ? serverError : 'Signup failed. Please try again.'
       );
     } finally {
       setLoading(false);
@@ -130,15 +119,11 @@ function Signup({ setIsLoggedIn }) {
           <h2>Save Your Recovery Codes</h2>
 
           <p>
-            Write these codes down or store them somewhere safe.
-            Never share them. Each code is intended to reset your
-            password once.
+            Write these codes down or store them somewhere safe. Never share them. Each code is
+            intended to reset your password once.
           </p>
 
-          <p>
-            Do not close or refresh this page until you have saved
-            them.
-          </p>
+          <p>Do not close or refresh this page until you have saved them.</p>
 
           <ul
             style={{
@@ -241,9 +226,7 @@ function Signup({ setIsLoggedIn }) {
           </div>
 
           <div>
-            <label htmlFor="signup-confirm">
-              Confirm Password
-            </label>
+            <label htmlFor="signup-confirm">Confirm Password</label>
             <input
               id="signup-confirm"
               type="password"
@@ -258,9 +241,7 @@ function Signup({ setIsLoggedIn }) {
           </div>
 
           <div>
-            <label htmlFor="signup-first-name">
-              First Name (optional)
-            </label>
+            <label htmlFor="signup-first-name">First Name (optional)</label>
             <input
               id="signup-first-name"
               type="text"
@@ -273,9 +254,7 @@ function Signup({ setIsLoggedIn }) {
           </div>
 
           <div>
-            <label htmlFor="signup-last-name">
-              Last Name (optional)
-            </label>
+            <label htmlFor="signup-last-name">Last Name (optional)</label>
             <input
               id="signup-last-name"
               type="text"
@@ -287,11 +266,7 @@ function Signup({ setIsLoggedIn }) {
             />
           </div>
 
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading}
-          >
+          <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Creating account...' : 'Sign Up'}
           </button>
         </form>

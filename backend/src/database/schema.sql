@@ -91,13 +91,14 @@ CREATE TABLE reviews (
 
 -- Create recovery codes table
 CREATE TABLE recovery_codes (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
   code_hash VARCHAR(255) NOT NULL,
   used BOOLEAN DEFAULT false,
-  used_at TIMESTAMP,
+  used_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '10 years'
+  expires_at TIMESTAMP NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Create indexes for better performance

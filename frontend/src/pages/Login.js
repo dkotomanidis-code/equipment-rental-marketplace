@@ -34,19 +34,19 @@ export default function Login({ language = 'en', setUser }) {
       noAccount: 'არ გაქვთ ანგარიში?',
       signup: 'დაკიდეთ აქ',
       forgotPassword: 'დაგავიწყდათ პაროლი?',
-      reset: 'აღდგენა აქ',
+      reset: 'აღდეგით აქ',
       errorUsername: 'გთხოვთ შეიყვანეთ მომხმარებლის სახელი ან ელ-ფოსტა',
       errorPassword: 'გთხოვთ შეიყვანეთ პაროლი',
       errorInvalid: 'არასწორი მომხმარებლის სახელი ან პაროლი',
-      errorGeneric: 'რაღაც ხარვეზი. გთხოვთ სცადოთ ხელახლა.',
+      errorGeneric: 'რაღაც არ გამოდგა. გთხოვთ სცადოთ ხელახლა.',
       loading: 'შესვლა...',
     },
     ru: {
-      title: 'Вход в вашу учётную запись',
+      title: 'Вход в вашу учетную запись',
       username: 'Имя пользователя или адрес электронной почты',
       password: 'Пароль',
       login: 'Вход',
-      noAccount: 'У вас нет учётной записи?',
+      noAccount: 'У вас нет учетной записи?',
       signup: 'Зарегистрируйтесь здесь',
       forgotPassword: 'Забыли пароль?',
       reset: 'Восстановите его здесь',
@@ -76,13 +76,26 @@ export default function Login({ language = 'en', setUser }) {
 
     setLoading(true);
     try {
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL || '/api'}/auth/login`,
-        { username, password }
-      );
+      const apiBase = (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
+      const response = await axios.post(`${apiBase}/auth/login`, {
+        username,
+        password,
+      });
 
-      setUser(response.data);
-      localStorage.setItem('user', JSON.stringify(response.data));
+      const { token, user } = response.data;
+
+      if (token) {
+        localStorage.setItem('token', token);
+      }
+
+      if (user) {
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+
+      if (typeof setUser === 'function') {
+        setUser(user);
+      }
+
       navigate('/dashboard');
     } catch (err) {
       const errorMsg = err.response?.data?.error || t.errorInvalid;
@@ -128,11 +141,17 @@ export default function Login({ language = 'en', setUser }) {
         </form>
 
         <p style={{ marginTop: '20px', textAlign: 'center', fontSize: '14px', color: '#aaa69c' }}>
-          {t.noAccount} <Link to="/signup" style={{ color: '#d6b66b', textDecoration: 'none' }}>{t.signup}</Link>
+          {t.noAccount}{' '}
+          <Link to="/signup" style={{ color: '#d6b66b', textDecoration: 'none' }}>
+            {t.signup}
+          </Link>
         </p>
 
         <p style={{ marginTop: '10px', textAlign: 'center', fontSize: '14px', color: '#aaa69c' }}>
-          {t.forgotPassword} <Link to="/forgot-password" style={{ color: '#d6b66b', textDecoration: 'none' }}>{t.reset}</Link>
+          {t.forgotPassword}{' '}
+          <Link to="/forgot-password" style={{ color: '#d6b66b', textDecoration: 'none' }}>
+            {t.reset}
+          </Link>
         </p>
       </div>
     </div>
