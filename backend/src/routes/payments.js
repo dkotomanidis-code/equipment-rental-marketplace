@@ -4,6 +4,8 @@ const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STR
 const pool = require('../database/pool');
 const { authenticate } = require('../middleware/auth');
 const { asyncRoute, priceCents } = require('../utils/api');
+const { randomUUID } = require('crypto');
+const { reconcileRefund } = require('../utils/refunds');
 
 const PLATFORM_COMMISSION_RATE = 0.05; // 5%
 const paymentColumns = `payment_id AS paymentId, booking_id AS bookingId, amount,
@@ -92,6 +94,7 @@ router.post('/refund', asyncRoute(async (req, res) => {
     return res.status(400).json({ error: 'Payment intent ID and valid refund reason required' });
   }
   const connection = await pool.getConnection();
+  let operation;
   try {
     await connection.beginTransaction();
     // Lock equipment/bookings before payments, matching booking creation's lock order.
@@ -101,7 +104,9 @@ router.post('/refund', asyncRoute(async (req, res) => {
       [paymentIntentId, req.user.id]
     );
     const [rows] = await connection.execute(
-      'SELECT status, refund_id FROM payments WHERE payment_id = ? AND user_id = ? FOR UPDATE',
+      `SELECT status, refund_id, refund_key, refund_reason,
+       TIMESTAMPDIFF(SECOND, refund_requested_at, CURRENT_TIMESTAMP) AS refund_age
+       FROM payments WHERE payment_id = ? AND user_id = ? FOR UPDATE`,
       [paymentIntentId, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Payment not found' });
@@ -109,28 +114,49 @@ router.post('/refund', asyncRoute(async (req, res) => {
     if (!['succeeded', 'refund_pending', 'refund_failed'].includes(payment.status) || linked[0]?.status === 'completed') {
       return res.status(409).json({ error: 'Payment cannot be refunded' });
     }
-    const refund = payment.status === 'refund_pending'
-      ? await stripe.refunds.retrieve(payment.refund_id)
-      : await stripe.refunds.create({
-        payment_intent: paymentIntentId, reason,
-      }, { idempotencyKey: `refund-${paymentIntentId}-${payment.refund_id || 'initial'}` });
-    const status = refund.status === 'succeeded' ? 'refunded'
-      : ['failed', 'canceled'].includes(refund.status) ? 'refund_failed' : 'refund_pending';
-    await connection.execute(
-      'UPDATE payments SET refund_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?',
-      [refund.id, status, paymentIntentId]
-    );
-    await connection.execute(
-      "UPDATE bookings SET payment_status = ?, status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?",
-      [status === 'refund_failed' ? 'paid' : status, paymentIntentId]
-    );
+    operation = payment;
+    if (payment.status !== 'refund_pending') {
+      operation = { refund_id: null, refund_key: randomUUID(), refund_reason: reason, refund_age: 0 };
+      await connection.execute(
+        `UPDATE payments SET status = 'refund_pending', refund_id = NULL, refund_key = ?,
+         refund_reason = ?, refund_requested_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE payment_id = ?`, [operation.refund_key, reason, paymentIntentId]
+      );
+      await connection.execute(
+        "UPDATE bookings SET payment_status = 'refund_pending', updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?",
+        [paymentIntentId]
+      );
+    }
+    // Commit a non-spendable operation before any external side effect.
     await connection.commit();
-    res.status(status === 'refund_pending' ? 202 : 200).json({
-      refundId: refund.id, status: refund.status, amount: refund.amount / 100,
-    });
   } finally {
     try { await connection.rollback(); } finally { connection.release(); }
   }
+  let refund;
+  if (operation.refund_id) {
+    refund = await stripe.refunds.retrieve(operation.refund_id);
+  } else {
+    // Recover accepted requests even after Stripe's idempotency cache expires.
+    for await (const candidate of stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 })) {
+      if (operation.refund_key && candidate.metadata?.refundKey === operation.refund_key) {
+        refund = candidate;
+        break;
+      }
+    }
+    if (!refund) {
+      if (!operation.refund_key || operation.refund_age >= 23 * 3600) {
+        return res.status(409).json({ error: 'Refund outcome requires reconciliation; payment remains blocked' });
+      }
+      refund = await stripe.refunds.create({
+        payment_intent: paymentIntentId, reason: operation.refund_reason,
+        metadata: { refundKey: operation.refund_key },
+      }, { idempotencyKey: operation.refund_key });
+    }
+  }
+  const status = await reconcileRefund(refund);
+  res.status(status === 'refund_pending' ? 202 : 200).json({
+    refundId: refund.id, status: refund.status, amount: refund.amount / 100,
+  });
 }));
 
 router.get('/:paymentId', asyncRoute(async (req, res) => {
@@ -152,35 +178,8 @@ router.webhook = asyncRoute(async (req, res) => {
   }
   if (!['refund.updated', 'refund.failed'].includes(event.type)) return res.json({ received: true });
   const refund = event.data.object;
-  const status = refund.status === 'succeeded' ? 'refunded'
-    : ['failed', 'canceled'].includes(refund.status) ? 'refund_failed' : null;
-  if (!status) return res.json({ received: true });
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-    await connection.execute(
-      `SELECT b.id FROM bookings b JOIN equipment e ON e.id = b.equipment_id
-       WHERE b.payment_id = ? FOR UPDATE`, [refund.payment_intent]
-    );
-    const [rows] = await connection.execute(
-      "SELECT amount FROM payments WHERE payment_id = ? AND refund_id = ? AND status = 'refund_pending' FOR UPDATE",
-      [refund.payment_intent, refund.id]
-    );
-    if (rows[0] && Math.round(rows[0].amount * 100) === refund.amount) {
-      await connection.execute(
-        'UPDATE payments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?',
-        [status, refund.payment_intent]
-      );
-      await connection.execute(
-        "UPDATE bookings SET payment_status = ?, status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE payment_id = ?",
-        [status === 'refund_failed' ? 'paid' : status, refund.payment_intent]
-      );
-    }
-    await connection.commit();
-    res.json({ received: true });
-  } finally {
-    try { await connection.rollback(); } finally { connection.release(); }
-  }
+  await reconcileRefund(refund);
+  res.json({ received: true });
 });
 
 module.exports = router;

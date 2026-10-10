@@ -112,6 +112,9 @@ router.put('/:id', asyncRoute(async (req, res) => {
     if (!participant(booking, req.user.id) || (status !== 'cancelled' && booking.ownerId !== req.user.id)) {
       return res.status(403).json({ error: 'Not authorized to change this booking status' });
     }
+    if (booking.paymentStatus === 'refund_pending') {
+      return res.status(409).json({ error: 'Booking is awaiting refund reconciliation' });
+    }
     const transitions = { pending: ['confirmed', 'cancelled'], confirmed: ['completed', 'cancelled'] };
     if (!transitions[booking.status]?.includes(status)) {
       return res.status(409).json({ error: 'Invalid booking status transition' });

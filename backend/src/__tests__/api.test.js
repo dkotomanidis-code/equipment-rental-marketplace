@@ -9,7 +9,7 @@ jest.mock('../database/pool', () => ({
 jest.mock('stripe', () => {
   const client = {
     paymentIntents: { create: jest.fn(), retrieve: jest.fn() },
-    refunds: { create: jest.fn(), retrieve: jest.fn() },
+    refunds: { create: jest.fn(), retrieve: jest.fn(), list: jest.fn(() => []) },
     webhooks: { constructEvent: jest.fn() },
   };
   return jest.fn(() => client);
@@ -286,6 +286,10 @@ describe('bookings', () => {
     connection.execute.mockResolvedValueOnce([[{ ...booking, paymentStatus: 'paid' }]]);
     expect((await asUser('PUT', '/bookings/8', { status: 'cancelled' })).status).toBe(409);
   });
+  test.each(['cancelled', 'completed', 'confirmed'])('pending refunds block booking transition to %s', async (status) => {
+    connection.execute.mockResolvedValueOnce([[{ ...booking, paymentStatus: 'refund_pending' }]]);
+    expect((await asUser('PUT', '/bookings/8', { status }, owner)).status).toBe(409);
+  });
   test('cannot alter price or renter through update', async () => {
     expect((await asUser('PUT', '/bookings/8', { status: 'confirmed', totalPrice: 1 })).status).toBe(400);
   });
@@ -354,14 +358,28 @@ describe('payment verification', () => {
     expect((await asUser('POST', '/payments/confirm', { paymentIntentId: 'pi_test' })).status).toBe(404);
     expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled();
   });
-  test('refund locks payment, verifies payer and cancels linked booking', async () => {
+  function mockRefund(status = 'succeeded', extra = {}) {
     connection.execute.mockResolvedValueOnce([[{ id: 8, status: 'confirmed' }]])
-      .mockResolvedValueOnce([[{ status: 'succeeded' }]])
+      .mockResolvedValueOnce([[{ status, ...extra }]]);
+    if (status !== 'refund_pending') {
+      connection.execute.mockResolvedValueOnce([{ affectedRows: 1 }]).mockResolvedValueOnce([{ affectedRows: 1 }]);
+    }
+    connection.execute.mockResolvedValueOnce([[{ id: 8 }]])
+      .mockResolvedValueOnce([[{ amount: 24.68 }]])
       .mockResolvedValue([{ affectedRows: 1 }]);
-    stripe.refunds.create.mockResolvedValue({ id: 're_test', status: 'succeeded', amount: 2468 });
+  }
+  const refund = (status) => ({
+    id: 're_test', payment_intent: 'pi_test', status, amount: 2468,
+  });
+  test('refund locks payment, verifies payer and only cancels after success', async () => {
+    mockRefund();
+    stripe.refunds.create.mockImplementation(async () => {
+      expect(connection.commit).toHaveBeenCalledTimes(1);
+      return refund('succeeded');
+    });
     expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).body.amount).toBe(24.68);
-    expect(connection.execute.mock.calls[3][0]).toContain("status = 'cancelled'");
-    expect(connection.commit).toHaveBeenCalled();
+    expect(connection.execute.mock.calls[7][0]).toContain("WHEN ? = 'refunded' THEN 'cancelled' ELSE status");
+    expect(connection.commit).toHaveBeenCalledTimes(2);
   });
   test('completed bookings cannot be refunded', async () => {
     connection.execute.mockResolvedValueOnce([[{ id: 8, status: 'completed' }]])
@@ -370,22 +388,63 @@ describe('payment verification', () => {
     expect(stripe.refunds.create).not.toHaveBeenCalled();
   });
   test('pending refunds are persisted as non-spendable rather than rolled back', async () => {
-    connection.execute.mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[{ status: 'succeeded', refund_id: null }]])
-      .mockResolvedValue([{ affectedRows: 1 }]);
-    stripe.refunds.create.mockResolvedValue({ id: 're_test', status: 'pending', amount: 2468 });
+    mockRefund();
+    stripe.refunds.create.mockResolvedValue(refund('pending'));
     expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(202);
-    expect(connection.execute.mock.calls[2][1]).toEqual(['re_test', 'refund_pending', 'pi_test']);
-    expect(connection.commit).toHaveBeenCalled();
+    expect(connection.execute.mock.calls[2][0]).toContain("status = 'refund_pending'");
+    expect(connection.execute.mock.calls[7][1]).toEqual(['refund_pending', 'refund_pending', 'pi_test']);
+    expect(connection.commit).toHaveBeenCalledTimes(2);
   });
   test('pending refund can be reconciled by retrieving it without creating another refund', async () => {
-    connection.execute.mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[{ status: 'refund_pending', refund_id: 're_test' }]])
-      .mockResolvedValue([{ affectedRows: 1 }]);
-    stripe.refunds.retrieve.mockResolvedValue({ id: 're_test', status: 'succeeded', amount: 2468 });
+    mockRefund('refund_pending', { refund_id: 're_test' });
+    stripe.refunds.retrieve.mockResolvedValue(refund('succeeded'));
     expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(200);
     expect(stripe.refunds.create).not.toHaveBeenCalled();
-    expect(connection.execute.mock.calls[2][1]).toEqual(['re_test', 'refunded', 'pi_test']);
+    expect(connection.execute.mock.calls[4][1]).toEqual(['re_test', 'refunded', 'pi_test']);
+  });
+  test.each(['failed', 'canceled'])('a %s refund keeps the existing reservation and paid status', async (status) => {
+    mockRefund();
+    stripe.refunds.create.mockResolvedValue(refund(status));
+    expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(200);
+    expect(connection.execute.mock.calls[7][1]).toEqual(['paid', 'refund_failed', 'pi_test']);
+    expect(connection.execute.mock.calls[7][0]).toContain('ELSE status END');
+  });
+  test('failure after Stripe accepts the refund cannot roll back the durable operation', async () => {
+    mockRefund();
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    connection.commit.mockResolvedValueOnce().mockRejectedValueOnce(new Error('Commit failed'));
+    stripe.refunds.create.mockResolvedValue(refund('succeeded'));
+    expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(500);
+    expect(connection.execute.mock.calls[2][0]).toContain("status = 'refund_pending'");
+    expect(connection.commit).toHaveBeenCalledTimes(2);
+    log.mockRestore();
+  });
+  test('failure to persist the operation never calls Stripe', async () => {
+    mockRefund();
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    connection.commit.mockRejectedValueOnce(new Error('Commit failed'));
+    expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(500);
+    expect(stripe.refunds.create).not.toHaveBeenCalled();
+    log.mockRestore();
+  });
+  test('interrupted Stripe response retries the exact persisted operation', async () => {
+    mockRefund('refund_pending', { refund_id: null, refund_key: 'durable-key', refund_reason: 'duplicate', refund_age: 10 });
+    stripe.refunds.create.mockResolvedValue(refund('succeeded'));
+    expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test', reason: 'fraudulent' })).status).toBe(200);
+    expect(stripe.refunds.create).toHaveBeenCalledWith({
+      payment_intent: 'pi_test', reason: 'duplicate', metadata: { refundKey: 'durable-key' },
+    }, { idempotencyKey: 'durable-key' });
+  });
+  test('accepted refund is recovered by operation metadata without recreating it', async () => {
+    mockRefund('refund_pending', { refund_id: null, refund_key: 'durable-key', refund_age: 100000 });
+    stripe.refunds.list.mockReturnValueOnce([{ ...refund('succeeded'), metadata: { refundKey: 'durable-key' } }]);
+    expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(200);
+    expect(stripe.refunds.create).not.toHaveBeenCalled();
+  });
+  test('ambiguous old operations stay blocked after the Stripe idempotency window', async () => {
+    mockRefund('refund_pending', { refund_id: null, refund_key: 'durable-key', refund_age: 100000 });
+    expect((await asUser('POST', '/payments/refund', { paymentIntentId: 'pi_test' })).status).toBe(409);
+    expect(stripe.refunds.create).not.toHaveBeenCalled();
   });
   test('checkout floating-point totals are normalized to cents', async () => {
     stripe.paymentIntents.create.mockResolvedValue({ id: 'pi_test', client_secret: 'test-client-secret' });
@@ -420,8 +479,9 @@ describe('refund webhooks', () => {
       .mockResolvedValue([{ affectedRows: 1 }]);
     expect((await webhook(refundStatus)).status).toBe(200);
     expect(Buffer.isBuffer(stripe.webhooks.constructEvent.mock.calls[0][0])).toBe(true);
-    expect(connection.execute.mock.calls[2][1]).toEqual([status, 'pi_test']);
-    expect(connection.execute.mock.calls[3][1]).toEqual([paymentStatus, 'pi_test']);
+    expect(connection.execute.mock.calls[2][1]).toEqual(['re_test', status, 'pi_test']);
+    expect(connection.execute.mock.calls[3][1]).toEqual([paymentStatus, status, 'pi_test']);
+    expect(connection.execute.mock.calls[3][0]).toContain('ELSE status END');
     expect(connection.commit).toHaveBeenCalled();
   });
   test('forged signatures cannot access the database', async () => {
@@ -432,6 +492,25 @@ describe('refund webhooks', () => {
     connection.execute.mockResolvedValueOnce([[]]).mockResolvedValueOnce([[]]);
     expect((await webhook('succeeded')).status).toBe(200);
     expect(connection.execute).toHaveBeenCalledTimes(2);
+  });
+  test('webhook can match operation metadata before the refund ID was persisted', async () => {
+    connection.execute.mockResolvedValueOnce([[]]).mockResolvedValueOnce([[{ amount: 24.68 }]])
+      .mockResolvedValue([{ affectedRows: 1 }]);
+    const payload = JSON.stringify({
+      type: 'refund.updated', data: { object: {
+        id: 're_test', payment_intent: 'pi_test', amount: 2468, status: 'succeeded',
+        metadata: { refundKey: 'durable-key' },
+      } },
+    });
+    const signature = realStripe.webhooks.generateTestHeaderString({
+      payload, secret: process.env.STRIPE_WEBHOOK_SECRET,
+    });
+    stripe.webhooks.constructEvent.mockImplementation(realStripe.webhooks.constructEvent.bind(realStripe.webhooks));
+    const result = await fetch(`${base}/payments/webhook`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': signature }, body: payload,
+    });
+    expect(result.status).toBe(200);
+    expect(connection.execute.mock.calls[1][1]).toEqual(['pi_test', 're_test', 'durable-key']);
   });
 });
 
