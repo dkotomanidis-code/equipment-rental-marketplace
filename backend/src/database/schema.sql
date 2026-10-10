@@ -22,7 +22,8 @@ CREATE TABLE equipment (
   name VARCHAR(255) NOT NULL,
   description TEXT,
   category VARCHAR(100),
-  price_per_day DECIMAL(10, 2) NOT NULL,
+  price_per_day DECIMAL(10, 2),
+  sale_price DECIMAL(10, 2),
   location VARCHAR(255),
   latitude DECIMAL(10, 8),
   longitude DECIMAL(11, 8),
@@ -88,6 +89,17 @@ CREATE TABLE reviews (
   FOREIGN KEY (reviewer_id) REFERENCES users(id)
 );
 
+-- Create recovery codes table
+CREATE TABLE recovery_codes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash VARCHAR(255) NOT NULL,
+  used BOOLEAN DEFAULT false,
+  used_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP + INTERVAL '10 years'
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_equipment_owner_id ON equipment(owner_id);
 CREATE INDEX idx_bookings_renter_id ON bookings(renter_id);
@@ -98,3 +110,5 @@ CREATE INDEX idx_reviews_booking_id ON reviews(booking_id);
 CREATE INDEX idx_equipment_category ON equipment(category);
 CREATE INDEX idx_bookings_status ON bookings(status);
 CREATE INDEX idx_payments_status ON payments(status);
+CREATE INDEX idx_recovery_codes_user_id ON recovery_codes(user_id);
+CREATE INDEX idx_recovery_codes_user_used ON recovery_codes(user_id, used);

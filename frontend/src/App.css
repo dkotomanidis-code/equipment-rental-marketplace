@@ -863,3 +863,320 @@ table th {
     padding: 2rem 1.5rem;
   }
 }
+
+/* BLACK & GOLD THEME — keep this after the existing CSS */
+
+:root {
+  color-scheme: dark;
+  --primary-color: #d6b66b;
+  --secondary-color: #d6b66b;
+  --text-dark: #f2f0ea;
+  --text-light: #aaa69d;
+  --bg-light: #191919;
+  --border-color: #34312b;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+body,
+.App {
+  background: #101010;
+  color: var(--text-dark);
+}
+
+body {
+  line-height: 1.6;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+a {
+  color: var(--primary-color);
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 4px;
+}
+
+/* Support both navigation class names already discussed */
+.navbar,
+.navbar-modern {
+  background: #121212;
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: none;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-modern {
+  padding: 18px 28px;
+}
+
+.navbar-top {
+  background: #171717;
+}
+
+.nav-center {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.nav-logo {
+  color: var(--primary-color);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.nav-menu,
+.nav-menu-modern {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  list-style: none;
+  gap: 24px;
+}
+
+.nav-link {
+  color: #e6e2d9;
+  font-size: 14px;
+}
+
+.nav-link:hover {
+  color: var(--primary-color);
+}
+
+.language-selector-top {
+  display: flex;
+  gap: 6px;
+}
+
+.lang-btn-simple {
+  background: transparent;
+  color: var(--text-light);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.lang-btn-simple:hover,
+.lang-btn-simple.active {
+  background: #252116;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.flag-btn:hover,
+.flag-btn.active {
+  background: #252116;
+}
+
+/* Home */
+.hero,
+.home .hero {
+  background: linear-gradient(135deg, #191919, #101010);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.hero-content h1,
+.home .hero h1 {
+  color: #f2f0ea;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.hero-content p {
+  color: var(--text-light);
+}
+
+.home h2 {
+  color: #f2f0ea;
+}
+
+.home .category-card,
+.home .equipment-card,
+.home .benefit-card {
+  background: #191919;
+  border: 1px solid var(--border-color);
+  box-shadow: none;
+}
+
+.home .category-card:hover,
+.home .equipment-card:hover,
+.home .benefit-card:hover {
+  border-color: #8c7747;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
+
+/* Inputs and filters */
+.nav-search,
+.search-input,
+.category-select,
+.filter-input,
+.auth-form input,
+.date-field input[type='date'],
+input,
+select,
+textarea {
+  background: #191919;
+  color: var(--text-dark);
+  border: 1px solid var(--border-color);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #918d84;
+}
+
+.nav-search:focus,
+.search-input:focus,
+.category-select:focus,
+.filter-input:focus,
+.auth-form input:focus,
+.date-field input[type='date']:focus {
+  background: #202020;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(214, 182, 107, 0.12);
+}
+
+/* Buttons */
+.btn-primary,
+.search-btn,
+.home .search-btn,
+.home .details-link {
+  background: var(--primary-color);
+  color: #14120d;
+  border: 1px solid var(--primary-color);
+  box-shadow: none;
+}
+
+.btn-primary:hover,
+.search-btn:hover,
+.home .search-btn:hover,
+.home .details-link:hover {
+  background: #e5c984;
+  color: #14120d;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-secondary,
+.home .browse-btn {
+  background: transparent;
+  color: var(--primary-color);
+  border: 1px solid #8c7747;
+}
+
+.btn-secondary:hover,
+.home .browse-btn:hover {
+  background: #252116;
+  color: #e5c984;
+}
+
+/* Browse, authentication, booking and confirmation */
+.equipment-card,
+.auth-form,
+.equipment-summary,
+.booking-form-section,
+.confirmation-container,
+table {
+  background: #191919;
+  border-color: var(--border-color);
+}
+
+.auth-page,
+.confirmation-page {
+  background: #101010;
+}
+
+.review-item,
+.price-summary,
+.price-breakdown,
+.card-element-wrapper,
+.confirmation-details,
+table th {
+  background: #22211e;
+}
+
+.card-element-wrapper:focus-within {
+  background: #22211e;
+  border-color: var(--primary-color);
+}
+
+.error {
+  background: #321b1b;
+  color: #ffb4b4;
+  border: 1px solid #663333;
+}
+
+.status-badge.confirmed {
+  background: #18382c;
+  color: #b7e5cd;
+}
+
+.home .contact-section {
+  background: #151515;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .nav-center {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .nav-menu-modern {
+    width: 100%;
+    gap: 16px;
+    order: 3;
+  }
+
+  .nav-logo {
+    white-space: normal;
+  }
+
+  .home .search-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard {
+    overflow-x: auto;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
