@@ -32,10 +32,14 @@ function authenticate(req, res, next) {
     if (!Number.isSafeInteger(user.id) || user.id <= 0 || !Number.isFinite(user.exp)) {
       throw new Error('Invalid token payload');
     }
+    const tokenVersion = user.tokenVersion === undefined ? 0 : user.tokenVersion;
+    if (!Number.isSafeInteger(tokenVersion) || tokenVersion < 0) {
+      throw new Error('Invalid token version');
+    }
     req.user = user;
     pool.query('SELECT token_version AS tokenVersion FROM users WHERE id = ?', [user.id])
       .then(([rows]) => {
-        if (!rows.length || rows[0].tokenVersion !== user.tokenVersion) {
+        if (!rows.length || rows[0].tokenVersion !== tokenVersion) {
           return res.status(401).json({ error: 'Invalid or expired token' });
         }
         req.user = user;

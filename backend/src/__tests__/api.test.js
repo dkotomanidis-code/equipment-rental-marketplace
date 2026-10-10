@@ -93,6 +93,15 @@ describe('authentication', () => {
     expect(jwt.verify(result.body.token, process.env.JWT_SECRET).id).toBe(2);
   });
 
+  test('legacy JWTs without a token version remain valid until password reset', async () => {
+    pool.execute.mockResolvedValueOnce([[booking]]);
+    const legacyToken = jwt.sign(user, process.env.JWT_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: '1h',
+    });
+    expect((await request('GET', '/bookings', undefined, legacyToken)).status).toBe(200);
+  });
+
   test('signup accepts the frontend empty optional name fields', async () => {
     pool.execute.mockResolvedValueOnce([[]]);
     connection.execute.mockImplementation(async (sql) =>
