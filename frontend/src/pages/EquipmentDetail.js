@@ -1,219 +1,179 @@
-﻿import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import FavoriteButton from '../components/FavoriteButton';
+import { API_BASE, authConfig } from '../utils/api';
 
-export default function EquipmentDetail({ language }) {
+const LABELS = {
+  en: {
+    title: 'Equipment details', price: 'Price', perDay: 'per day', location: 'Location', description: 'Description',
+    reviews: 'Reviews', book: 'Book now', contact: 'Contact owner', loading: 'Loading…', missing: 'Equipment not found.',
+    average: 'Average', noReviews: 'No reviews yet.', addReview: 'Add a review', rating: 'Rating', comment: 'Comment',
+    submit: 'Submit review', signIn: 'Sign in to review', noBooking: 'A completed booking is required to review this equipment.',
+    reviewError: 'Could not submit review.', reviewSuccess: 'Review submitted.', bookings: 'Completed booking',
+  },
+  ka: {
+    title: 'ტექნიკის დეტალები', price: 'ფასი', perDay: 'დღეში', location: 'მდებარეობა', description: 'აღწერა',
+    reviews: 'მიმოხილვები', book: 'დაჯავშნა', contact: 'მფლობელთან დაკავშირება', loading: 'იტვირთება…', missing: 'ტექნიკა ვერ მოიძებნა.',
+    average: 'საშუალო', noReviews: 'მიმოხილვები ჯერ არ არის.', addReview: 'მიმოხილვის დამატება', rating: 'რეიტინგი', comment: 'კომენტარი',
+    submit: 'მიმოხილვის გაგზავნა', signIn: 'შედით მიმოხილვის დასაწერად', noBooking: 'მიმოხილვისთვის დასრულებული ჯავშანია საჭირო.',
+    reviewError: 'მიმოხილვის გაგზავნა ვერ მოხერხდა.', reviewSuccess: 'მიმოხილვა გაიგზავნა.', bookings: 'დასრულებული ჯავშანი',
+  },
+  ru: {
+    title: 'Информация об оборудовании', price: 'Цена', perDay: 'в день', location: 'Местоположение', description: 'Описание',
+    reviews: 'Отзывы', book: 'Забронировать', contact: 'Связаться с владельцем', loading: 'Загрузка…', missing: 'Оборудование не найдено.',
+    average: 'Средняя оценка', noReviews: 'Отзывов пока нет.', addReview: 'Оставить отзыв', rating: 'Оценка', comment: 'Комментарий',
+    submit: 'Отправить отзыв', signIn: 'Войдите, чтобы оставить отзыв', noBooking: 'Для отзыва требуется завершённая аренда.',
+    reviewError: 'Не удалось отправить отзыв.', reviewSuccess: 'Отзыв отправлен.', bookings: 'Завершённая аренда',
+  },
+};
+
+function currentUserId() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null')?.id;
+  } catch {
+    return null;
+  }
+}
+
+export default function EquipmentDetail({ language = 'en' }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const t = LABELS[language] || LABELS.en;
   const [equipment, setEquipment] = useState(null);
-  const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [reviews, setReviews] = useState({ items: [], total: 0, averageRating: 0 });
+  const [eligibleBookings, setEligibleBookings] = useState([]);
+  const [bookingId, setBookingId] = useState('');
   const [rating, setRating] = useState(5);
-  const [reviewText, setReviewText] = useState('');
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [comment, setComment] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const userId = currentUserId();
 
-  const translations = {
-    en: {
-      details: 'Equipment Details',
-      price: 'Price',
-      perDay: 'per day',
-      owner: 'Owner',
-      location: 'Location',
-      description: 'Description',
-      reviews: 'Reviews',
-      bookNow: 'Book Now',
-      addToFavorites: 'Add to Favorites',
-      removeFromFavorites: 'Remove from Favorites',
-      addReview: 'Add Review',
-      rating: 'Rating',
-      submitReview: 'Submit Review',
-      noReviews: 'No reviews yet',
-    },
-    ka: {
-      details: 'აღჭურვილობის დეტალები',
-      price: 'ფასი',
-      perDay: 'დღეში',
-      owner: 'მფლობელი',
-      location: 'ადგილმდებარეობა',
-      description: 'აღწერა',
-      reviews: 'მიმოხილვები',
-      bookNow: 'დაჯავშნა',
-      addToFavorites: 'რჩეულებში დამატება',
-      removeFromFavorites: 'რჩეულებიდან ამოშლა',
-      addReview: 'მიმოხილვის დამატება',
-      rating: 'რეიტინგი',
-      submitReview: 'მიმოხილვის გაგზავნა',
-      noReviews: 'მიმოხილვები ჯერ არ არის',
-    },
-    ru: {
-      details: 'Детали оборудования',
-      price: 'Цена',
-      perDay: 'в день',
-      owner: 'Владелец',
-      location: 'Местоположение',
-      description: 'Описание',
-      reviews: 'Отзывы',
-      bookNow: 'Забронировать',
-      addToFavorites: 'Добавить в избранное',
-      removeFromFavorites: 'Удалить из избранного',
-      addReview: 'Добавить отзыв',
-      rating: 'Рейтинг',
-      submitReview: 'Отправить отзыв',
-      noReviews: 'Отзывов еще нет',
-    },
-  };
-
-  const t = translations[language];
+  async function loadReviews() {
+    const { data } = await axios.get(`${API_BASE}/reviews/equipment/${id}?page=1&limit=50`);
+    setReviews(data);
+  }
 
   useEffect(() => {
-    const fetchEquipment = async () => {
+    let active = true;
+    async function load() {
       try {
-        const response = await axios.get(`/api/equipment/${id}`);
-        setEquipment(response.data);
-        
-        const reviewsResponse = await axios.get(`/api/reviews/${id}`);
-        setReviews(reviewsResponse.data || []);
-
-        const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-        setIsFavorite(favorites.includes(parseInt(id)));
+        const { data } = await axios.get(`${API_BASE}/equipment/${id}`);
+        if (active) setEquipment(data);
+        await loadReviews();
+        if (localStorage.getItem('token')) {
+          const { data: eligible } = await axios.get(`${API_BASE}/reviews/eligible/${id}`, authConfig());
+          if (active) setEligibleBookings(eligible.bookings);
+        }
       } catch (err) {
-        setError(err.message);
+        if (active) setError(err.response?.data?.error || t.missing);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
-    };
+    }
+    load();
+    return () => { active = false; };
+  }, [id, t.missing]);
 
-    fetchEquipment();
-  }, [id]);
-
-  const handleAddReview = async () => {
+  async function submitReview(event) {
+    event.preventDefault();
     if (!localStorage.getItem('token')) {
-      alert('Please log in to add a review');
       navigate('/login');
       return;
     }
-
     try {
-      await axios.post(`/api/reviews/${id}`, 
-        { rating, text: reviewText },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-      );
-      setReviewText('');
-      setRating(5);
-      
-      const reviewsResponse = await axios.get(`/api/reviews/${id}`);
-      setReviews(reviewsResponse.data || []);
+      const { data } = await axios.post(`${API_BASE}/reviews`, {
+        bookingId: Number(bookingId),
+        rating: Number(rating),
+        comment,
+      }, authConfig());
+      setEligibleBookings((current) => current.filter((booking) => booking.bookingId !== data.bookingId));
+      setComment('');
+      setNotice(t.reviewSuccess);
+      setError('');
+      await loadReviews();
     } catch (err) {
-      alert('Error adding review');
+      setError(err.response?.data?.error || t.reviewError);
     }
-  };
+  }
 
-  const handleFavorite = () => {
-    const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-    if (isFavorite) {
-      const filtered = favorites.filter(fav => fav !== parseInt(id));
-      localStorage.setItem('favorites', JSON.stringify(filtered));
-    } else {
-      favorites.push(parseInt(id));
-      localStorage.setItem('favorites', JSON.stringify(favorites));
+  async function contactOwner() {
+    if (!localStorage.getItem('token')) {
+      navigate('/login');
+      return;
     }
-    setIsFavorite(!isFavorite);
-  };
+    try {
+      const { data } = await axios.post(`${API_BASE}/chat/conversations`, { equipmentId: Number(id) }, authConfig());
+      navigate(`/messages/${data.id}`);
+    } catch (err) {
+      setError(err.response?.data?.error || t.reviewError);
+    }
+  }
 
-  if (loading) return <div style={{ padding: '24px' }}>Loading...</div>;
-  if (error) return <div style={{ padding: '24px', color: 'red' }}>Error: {error}</div>;
-  if (!equipment) return <div style={{ padding: '24px' }}>Equipment not found</div>;
+  if (loading) return <main className="feature-page"><p>{t.loading}</p></main>;
+  if (!equipment) return <main className="feature-page"><p role="alert">{error || t.missing}</p></main>;
 
   return (
-    <main style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+    <main className="feature-page equipment-detail">
+      {error && <p role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
+      <div className="equipment-detail-grid">
         <div>
-          <img src={equipment.image_url || '/placeholder.jpg'} alt={equipment.name} style={{ width: '100%', borderRadius: '8px' }} />
+          {equipment.imageUrl && <img src={equipment.imageUrl} alt={equipment.name} className="equipment-detail-image" />}
         </div>
-        <div>
+        <section>
           <h1>{equipment.name}</h1>
-          <p style={{ fontSize: '24px', color: '#667eea', fontWeight: 'bold' }}>
-            ${equipment.daily_price} <span style={{ fontSize: '16px' }}>{t.perDay}</span>
-          </p>
-          
-          <p><strong>{t.location}:</strong> {equipment.location}</p>
-          <p><strong>{t.description}:</strong> {equipment.description}</p>
-
-          <div style={{ display: 'flex', gap: '12px', margin: '24px 0' }}>
-            <button 
-              onClick={() => navigate(`/booking/${id}`)}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: '#667eea',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '16px',
-              }}
-            >
-              {t.bookNow}
-            </button>
-            <button 
-              onClick={handleFavorite}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: isFavorite ? '#ff6b6b' : '#e9ecef',
-                color: isFavorite ? 'white' : 'black',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-              }}
-            >
-              {isFavorite ? t.removeFromFavorites : t.addToFavorites}
-            </button>
+          <p><strong>{t.price}:</strong> ${equipment.pricePerDay} {t.perDay}</p>
+          <p><strong>{t.location}:</strong> {equipment.location || '—'}</p>
+          <p><strong>{t.description}:</strong> {equipment.description || '—'}</p>
+          <div className="feature-actions">
+            <button type="button" onClick={() => navigate(`/booking/${id}`)}>{t.book}</button>
+            {userId !== equipment.ownerId && <button type="button" onClick={contactOwner}>{t.contact}</button>}
+            <FavoriteButton equipmentId={id} language={language} />
           </div>
-        </div>
+        </section>
       </div>
 
-      <section style={{ marginTop: '48px' }}>
-        <h2>{t.reviews}</h2>
-        
-        <div style={{ marginBottom: '32px', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-          <h3>{t.addReview}</h3>
-          <label style={{ display: 'block', marginBottom: '8px' }}>
-            {t.rating}: 
-            <select value={rating} onChange={(e) => setRating(e.target.value)} style={{ marginLeft: '8px' }}>
-              {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </label>
-          <textarea
-            value={reviewText}
-            onChange={(e) => setReviewText(e.target.value)}
-            placeholder="Write your review..."
-            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minHeight: '100px' }}
-          />
-          <button 
-            onClick={handleAddReview}
-            style={{
-              marginTop: '12px',
-              padding: '8px 16px',
-              backgroundColor: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            {t.submitReview}
-          </button>
-        </div>
-
-        {reviews.length === 0 ? (
-          <p>{t.noReviews}</p>
-        ) : (
-          reviews.map(review => (
-            <div key={review.id} style={{ padding: '16px', borderBottom: '1px solid #ddd' }}>
-              <p><strong>★ {review.rating}</strong> - {review.user_name}</p>
-              <p>{review.text}</p>
-            </div>
-          ))
+      <section className="review-section">
+        <h2>{t.reviews} ({reviews.total})</h2>
+        {reviews.total > 0 && <p>{t.average}: {reviews.averageRating.toFixed(1)} / 5</p>}
+        {!userId ? <p><Link to="/login">{t.signIn}</Link></p> :
+          userId !== equipment.ownerId && eligibleBookings.length === 0 && <p>{t.noBooking}</p>}
+        {userId && userId !== equipment.ownerId && eligibleBookings.length > 0 && (
+          <form onSubmit={submitReview} className="review-form">
+            <h3>{t.addReview}</h3>
+            <label>
+              {t.bookings}
+              <select value={bookingId} onChange={(event) => setBookingId(event.target.value)} required>
+                <option value="">—</option>
+                {eligibleBookings.map((booking) => <option key={booking.bookingId} value={booking.bookingId}>{booking.bookingId}</option>)}
+              </select>
+            </label>
+            <label>
+              {t.rating}
+              <select value={rating} onChange={(event) => setRating(Number(event.target.value))}>
+                {[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              {t.comment}
+              <textarea value={comment} maxLength={2000} onChange={(event) => setComment(event.target.value)} />
+            </label>
+            <button type="submit" disabled={!bookingId}>{t.submit}</button>
+          </form>
+        )}
+        {!reviews.items.length ? <p>{t.noReviews}</p> : (
+          <ul className="feature-list">
+            {reviews.items.map((review) => (
+              <li key={review.id}>
+                <strong>★ {review.rating} · {review.reviewerUsername}</strong>
+                <p>{review.comment || ''}</p>
+                <time>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ''}</time>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </main>

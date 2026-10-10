@@ -89,9 +89,9 @@ router.post(
 
       const [result] = await connection.execute(
         `INSERT INTO users
-           (username, email, password, first_name, last_name,
-            created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
+             (username, email, password, first_name, last_name,
+              token_version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 0, NOW(), NOW())`,
         [
           normalizedUsername,
           normalizedEmail,
@@ -119,7 +119,7 @@ router.post(
       // Sign before committing so a signing error also rolls back signup.
       responseBody = {
         message: 'User created successfully',
-        token: signToken(user),
+        token: signToken({ ...user, tokenVersion: 0 }),
         user,
         recoveryCodes: codes,
         recoveryMessage:
@@ -171,7 +171,7 @@ router.post(
       : username.trim();
 
     const [rows] = await pool.execute(
-      'SELECT id, username, email, password FROM users WHERE username = ? OR email = ?',
+      'SELECT id, username, email, password, token_version AS tokenVersion FROM users WHERE username = ? OR email = ?',
       [lookup, lookup]
     );
 
@@ -193,7 +193,7 @@ router.post(
 
     return res.json({
       message: 'Login successful',
-      token: signToken(account),
+      token: signToken({ ...account, tokenVersion: user.tokenVersion }),
       user: account,
     });
   })

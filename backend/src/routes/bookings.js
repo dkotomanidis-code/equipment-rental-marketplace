@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../database/pool');
 const { authenticate } = require('../middleware/auth');
 const { asyncRoute, validId, rentalDays, priceCents, bookingColumns } = require('../utils/api');
+const { createNotification } = require('../utils/notifications');
 
 router.use(authenticate);
 
@@ -89,6 +90,15 @@ router.post('/', asyncRoute(async (req, res) => {
       await connection.execute('UPDATE payments SET booking_id = ? WHERE payment_id = ?', [result.insertId, paymentId]);
     }
     const booking = await findBooking(connection, result.insertId);
+    await createNotification(connection, {
+      userId: item.owner_id,
+      actorId: req.user.id,
+      eventKey: `booking:${result.insertId}:created`,
+      type: 'booking',
+      message: 'A renter requested your equipment',
+      resourceType: 'booking',
+      resourceId: result.insertId,
+    });
     await connection.commit();
     res.status(201).json(response(booking));
   } finally {
@@ -125,6 +135,18 @@ router.put('/:id', asyncRoute(async (req, res) => {
     await connection.execute('UPDATE bookings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [
       status, req.params.id,
     ]);
+    const recipientId = status === 'cancelled'
+      ? (booking.renterId === req.user.id ? booking.ownerId : booking.renterId)
+      : booking.renterId;
+    await createNotification(connection, {
+      userId: recipientId,
+      actorId: req.user.id,
+      eventKey: `booking:${booking.id}:${status}:${recipientId}`,
+      type: 'booking',
+      message: `Your booking was ${status}`,
+      resourceType: 'booking',
+      resourceId: booking.id,
+    });
     await connection.commit();
     res.json(response({ ...booking, status }));
   } finally {

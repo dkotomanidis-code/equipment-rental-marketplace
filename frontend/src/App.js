@@ -17,6 +17,10 @@ import Booking from './pages/Booking';
 import PaymentConfirmation from './pages/PaymentConfirmation';
 import ListEquipment from './pages/ListEquipment';
 import ForgotPassword from './pages/ForgotPassword';
+import Wishlist from './pages/Wishlist';
+import Chat from './pages/Chat';
+import Notifications from './pages/Notifications';
+import ActivityBadges from './components/ActivityBadges';
 
 import './App.css';
 
@@ -26,6 +30,7 @@ const TRANSLATIONS = {
     browse: 'Browse',
     listEquipment: 'List Equipment',
     dashboard: 'Dashboard',
+    wishlist: 'Wishlist',
     logout: 'Logout',
     login: 'Login',
     signup: 'Sign Up',
@@ -40,6 +45,7 @@ const TRANSLATIONS = {
     browse: 'ტექნიკის დათვალიერება',
     listEquipment: 'ტექნიკის დამატება',
     dashboard: 'მართვის პანელი',
+    wishlist: 'სურვილების სია',
     logout: 'გამოსვლა',
     login: 'შესვლა',
     signup: 'რეგისტრაცია',
@@ -54,6 +60,7 @@ const TRANSLATIONS = {
     browse: 'Каталог техники',
     listEquipment: 'Добавить технику',
     dashboard: 'Панель управления',
+    wishlist: 'Избранное',
     logout: 'Выход',
     login: 'Вход',
     signup: 'Регистрация',
@@ -234,6 +241,12 @@ function App() {
                   </li>
 
                   <li className="nav-item">
+                    <Link to="/wishlist" className="nav-link">{t.wishlist}</Link>
+                  </li>
+
+                  <ActivityBadges language={language} isLoggedIn={isLoggedIn} />
+
+                  <li className="nav-item">
                     <button
                       type="button"
                       onClick={handleLogout}
@@ -327,6 +340,10 @@ function App() {
             path="/dashboard"
             element={<Dashboard {...pageProps} user={user} />}
           />
+
+          <Route path="/wishlist" element={<Wishlist {...pageProps} />} />
+          <Route path="/messages/:conversationId?" element={<Chat {...pageProps} isLoggedIn={isLoggedIn} />} />
+          <Route path="/notifications" element={<Notifications {...pageProps} />} />
 
           <Route
             path="/booking/:equipmentId"

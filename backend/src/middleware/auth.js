@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const pool = require('../database/pool');
 
 const secret = process.env.JWT_SECRET;
 const expiresIn = process.env.JWT_EXPIRE || '7d';
@@ -10,7 +11,12 @@ if (!/^[1-9]\d*[smhd]$/.test(expiresIn)) {
 }
 
 function signToken(user) {
-  return jwt.sign({ id: user.id, username: user.username, email: user.email }, secret, {
+  return jwt.sign({
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    tokenVersion: Number.isSafeInteger(user.tokenVersion) ? user.tokenVersion : 0,
+  }, secret, {
     algorithm: 'HS256',
     expiresIn,
   });
@@ -27,7 +33,15 @@ function authenticate(req, res, next) {
       throw new Error('Invalid token payload');
     }
     req.user = user;
-    next();
+    pool.query('SELECT token_version AS tokenVersion FROM users WHERE id = ?', [user.id])
+      .then(([rows]) => {
+        if (!rows.length || rows[0].tokenVersion !== user.tokenVersion) {
+          return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+        req.user = user;
+        return next();
+      })
+      .catch(next);
   } catch (error) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }

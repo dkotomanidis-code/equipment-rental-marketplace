@@ -15,10 +15,28 @@ const bookingRoutes = require('./routes/bookings');
 const reviewRoutes = require('./routes/reviews');
 const paymentRoutes = require('./routes/payments');
 const recoveryRoutes = require('./routes/recovery');
+const favoriteRoutes = require('./routes/favorites');
+const chatRoutes = require('./routes/chat');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGINS || (
+  process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000,http://127.0.0.1:3000'
+)).split(',').map((origin) => origin.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, !origin || allowedOrigins.includes(origin));
+  },
+}));
+
+if (process.env.TRUST_PROXY_HOPS !== undefined) {
+  if (!/^[1-9]\d*$/.test(process.env.TRUST_PROXY_HOPS) ||
+      Number(process.env.TRUST_PROXY_HOPS) > 10) {
+    throw new Error('TRUST_PROXY_HOPS must be an integer from 1 to 10');
+  }
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
+}
 
 const rateLimitOptions = {
   windowMs: 15 * 60 * 1000,
@@ -69,6 +87,9 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/recovery', recoveryRoutes);
+app.use('/api/favorites', favoriteRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({

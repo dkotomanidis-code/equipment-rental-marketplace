@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import FavoriteButton from '../components/FavoriteButton';
 import '../styles/Browse.css';
 
 /*
@@ -907,6 +908,7 @@ export default function Equipment({ language = 'en' }) {
                           <Link className="br-details" to={`/equipment/${item.id}`}>
                             {t.details}
                           </Link>
+                          <FavoriteButton equipmentId={item.id} language={lang} />
                         </div>
                       </div>
                     </article>

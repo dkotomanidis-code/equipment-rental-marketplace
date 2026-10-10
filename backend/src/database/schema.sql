@@ -11,6 +11,7 @@ CREATE TABLE users (
   bio TEXT,
   is_renter BOOLEAN DEFAULT true,
   is_owner BOOLEAN DEFAULT false,
+  token_version INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -86,7 +87,9 @@ CREATE TABLE reviews (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (booking_id) REFERENCES bookings(id),
-  FOREIGN KEY (reviewer_id) REFERENCES users(id)
+  FOREIGN KEY (reviewer_id) REFERENCES users(id),
+  UNIQUE KEY uq_reviews_booking_reviewer (booking_id, reviewer_id),
+  INDEX idx_reviews_booking_created (booking_id, created_at, id)
 );
 
 -- Create recovery codes table
@@ -113,3 +116,58 @@ CREATE INDEX idx_bookings_status ON bookings(status);
 CREATE INDEX idx_payments_status ON payments(status);
 CREATE INDEX idx_recovery_codes_user_id ON recovery_codes(user_id);
 CREATE INDEX idx_recovery_codes_user_used ON recovery_codes(user_id, used);
+
+CREATE TABLE favorites (
+  user_id INT NOT NULL,
+  equipment_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, equipment_id),
+  INDEX idx_favorites_user_created (user_id, created_at, equipment_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (equipment_id) REFERENCES equipment(id) ON DELETE CASCADE
+);
+
+CREATE TABLE conversations (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  equipment_id INT NULL,
+  renter_id INT NOT NULL,
+  owner_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_conversations_listing_renter (equipment_id, renter_id),
+  INDEX idx_conversations_renter_updated (renter_id, updated_at, id),
+  INDEX idx_conversations_owner_updated (owner_id, updated_at, id),
+  FOREIGN KEY (equipment_id) REFERENCES equipment(id) ON DELETE SET NULL,
+  FOREIGN KEY (renter_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE messages (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  conversation_id INT NOT NULL,
+  sender_id INT NOT NULL,
+  body VARCHAR(2000) NOT NULL,
+  read_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_messages_conversation_id (conversation_id, id),
+  INDEX idx_messages_unread (conversation_id, sender_id, read_at, id),
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE notifications (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  actor_id INT NULL,
+  event_key VARCHAR(191) NOT NULL UNIQUE,
+  type VARCHAR(40) NOT NULL,
+  message VARCHAR(255) NOT NULL,
+  resource_type VARCHAR(40) NOT NULL,
+  resource_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  read_at TIMESTAMP NULL,
+  INDEX idx_notifications_user_created (user_id, created_at, id),
+  INDEX idx_notifications_user_unread (user_id, read_at, id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+);
