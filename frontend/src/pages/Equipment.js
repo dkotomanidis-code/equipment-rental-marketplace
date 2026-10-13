@@ -1,7 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import FavoriteButton from '../components/FavoriteButton';
+import EquipmentMap from '../components/EquipmentMap';
+import {
+  DISTANCE_OPTIONS_KM, cityLabel, cityOptions, findCity,
+} from '../data/georgiaCities';
 import '../styles/Browse.css';
 
 /*
@@ -217,6 +221,24 @@ const TEXT = {
     other: 'Uncategorised',
     unknownType: 'Type not specified',
     currencyNote: 'Price filters use the backend\'s existing USD values.',
+    city: 'City',
+    allCities: 'All cities',
+    distance: 'Distance',
+    near: 'Search near',
+    nearNone: 'No reference point',
+    myLocation: 'My location',
+    useMyLocation: 'Use my location',
+    locating: 'Finding your location…',
+    locationDenied: 'We could not access your location. Choose a city to search near instead.',
+    within: 'Within',
+    anyDistance: 'Any distance',
+    distanceHint: 'Listings without a set location are hidden when a distance limit is applied.',
+    chooseReference: 'Choose a reference point to apply the distance limit.',
+    nearest: 'Nearest first',
+    mapView: 'Map view',
+    map: 'Equipment map',
+    reference: 'Search reference point',
+    noCoordinates: 'listing(s) without a map location are shown in grid and list views only.',
   },
   ka: {
     eyebrow: 'სამშენებლო ტექნიკა',
@@ -274,6 +296,24 @@ const TEXT = {
     other: 'კატეგორია მითითებული არ არის',
     unknownType: 'ტიპი მითითებული არ არის',
     currencyNote: 'ფასის ფილტრები იყენებს სერვერზე არსებულ ფასებს აშშ დოლარში.',
+    city: 'ქალაქი',
+    allCities: 'ყველა ქალაქი',
+    distance: 'მანძილი',
+    near: 'ძებნა ახლოს',
+    nearNone: 'საწყისი წერტილის გარეშე',
+    myLocation: 'ჩემი მდებარეობა',
+    useMyLocation: 'ჩემი მდებარეობის გამოყენება',
+    locating: 'თქვენი მდებარეობა განისაზღვრება…',
+    locationDenied: 'თქვენი მდებარეობის მიღება ვერ მოხერხდა. სანაცვლოდ აირჩიეთ ქალაქი.',
+    within: 'რადიუსი',
+    anyDistance: 'ნებისმიერი მანძილი',
+    distanceHint: 'მანძილის ფილტრის გამოყენებისას მდებარეობის გარეშე განცხადებები არ ჩანს.',
+    chooseReference: 'მანძილის ფილტრისთვის აირჩიეთ საწყისი წერტილი.',
+    nearest: 'ჯერ უახლოესი',
+    mapView: 'რუკის ხედი',
+    map: 'ტექნიკის რუკა',
+    reference: 'ძებნის საწყისი წერტილი',
+    noCoordinates: 'განცხადება რუკის მდებარეობის გარეშე ჩანს მხოლოდ ბადისა და სიის ხედში.',
   },
   ru: {
     eyebrow: 'СТРОИТЕЛЬНАЯ ТЕХНИКА',
@@ -331,6 +371,24 @@ const TEXT = {
     other: 'Без категории',
     unknownType: 'Тип не указан',
     currencyNote: 'Фильтры используют текущие цены на сервере в долларах США.',
+    city: 'Город',
+    allCities: 'Все города',
+    distance: 'Расстояние',
+    near: 'Искать рядом с',
+    nearNone: 'Без точки отсчёта',
+    myLocation: 'Моё местоположение',
+    useMyLocation: 'Использовать моё местоположение',
+    locating: 'Определяем ваше местоположение…',
+    locationDenied: 'Не удалось получить ваше местоположение. Выберите город вместо этого.',
+    within: 'В радиусе',
+    anyDistance: 'Любое расстояние',
+    distanceHint: 'При фильтре по расстоянию объявления без местоположения скрываются.',
+    chooseReference: 'Выберите точку отсчёта, чтобы применить радиус.',
+    nearest: 'Сначала ближайшие',
+    mapView: 'Карта',
+    map: 'Карта техники',
+    reference: 'Точка отсчёта',
+    noCoordinates: 'объявл. без координат показаны только в виде плиток и списка.',
   },
 };
 
@@ -374,6 +432,11 @@ function normalizeItem(item) {
   if (Number.isFinite(rentalPrice) && rentalPrice >= 0) listingType = 'rental';
   if (Number.isFinite(salePrice) && salePrice >= 0) listingType = 'sale';
   
+  const coordinate = (value) => (value === '' || value == null ? NaN : Number(value));
+  const latitude = coordinate(item.latitude);
+  const longitude = coordinate(item.longitude);
+  const distanceKm = coordinate(item.distanceKm);
+
   const rawAvailability = item.availabilityStatus ?? item.availability_status;
   let available = null;
   if ([true, 1, '1', 'true'].includes(rawAvailability)) available = true;
@@ -384,6 +447,10 @@ function normalizeItem(item) {
     name: String(item.name ?? ''),
     description: String(item.description ?? ''),
     location: String(item.location ?? ''),
+    city: findCity(item.city)?.name ?? '',
+    latitude: Number.isFinite(latitude) && Number.isFinite(longitude) ? latitude : null,
+    longitude: Number.isFinite(latitude) && Number.isFinite(longitude) ? longitude : null,
+    distanceKm: Number.isFinite(distanceKm) ? distanceKm : null,
     categoryId: category?.id ?? '',
     typeId: type?.[0] ?? '',
     rentalPrice: Number.isFinite(rentalPrice) && rentalPrice >= 0 ? rentalPrice : null,
@@ -433,9 +500,13 @@ export default function Equipment({ language = 'en' }) {
   const t = TEXT[lang];
 
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [status, setStatus] = useState('loading');
   const [reload, setReload] = useState(0);
+  const [myPosition, setMyPosition] = useState(null);
+  const [geoState, setGeoState] = useState('idle');
+  const [geoAttempt, setGeoAttempt] = useState(0);
 
   const search = params.get('search') || '';
   const categoryId = params.get('category') || '';
@@ -446,7 +517,24 @@ export default function Equipment({ language = 'en' }) {
   const maximum = params.get('max') || '';
   const onlyAvailable = params.get('available') === '1';
   const sort = params.get('sort') || 'newest';
-  const view = params.get('view') === 'list' ? 'list' : 'grid';
+  const view = ['list', 'map'].includes(params.get('view')) ? params.get('view') : 'grid';
+  const cityParam = params.get('city') || '';
+  const cityFilter = findCity(cityParam);
+  const near = params.get('near') || '';
+  const nearCity = near && near !== 'me' ? findCity(near) : undefined;
+  const requestedRadius = Number(params.get('radius'));
+  const radius = DISTANCE_OPTIONS_KM.includes(requestedRadius) ? requestedRadius : null;
+
+  // Reference point for distance: the browser location or a chosen city centre.
+  const reference = useMemo(() => {
+    if (near === 'me') return myPosition;
+    if (nearCity) return { latitude: nearCity.latitude, longitude: nearCity.longitude };
+    return null;
+  }, [near, nearCity, myPosition]);
+  const cityQuery = cityFilter?.name ?? '';
+  const referenceLat = reference ? reference.latitude.toFixed(4) : '';
+  const referenceLng = reference ? reference.longitude.toFixed(4) : '';
+  const radiusQuery = reference && radius ? String(radius) : '';
 
   const requestedPage = Number(params.get('page'));
   const pageNumber =
@@ -461,11 +549,14 @@ export default function Equipment({ language = 'en' }) {
 
   const currentType = visibleTypes.find((row) => row[0] === typeId);
   const locale = { en: 'en-US', ka: 'ka-GE', ru: 'ru-RU' }[lang];
-  const money = new Intl.NumberFormat(locale, {
+  const money = useMemo(() => new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 2,
-  });
+  }), [locale]);
+  const kilometres = useMemo(() => new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 1,
+  }), [locale]);
 
   function changeFilters(changes) {
     setParams((previous) => {
@@ -483,9 +574,41 @@ export default function Equipment({ language = 'en' }) {
 
   function resetFilters() {
     const next = new URLSearchParams();
-    if (view === 'list') next.set('view', 'list');
+    if (view !== 'grid') next.set('view', view);
     setParams(next, { replace: true });
   }
+
+  function locateMe() {
+    setGeoAttempt((value) => value + 1);
+    changeFilters({ near: 'me', sort: 'distance' });
+  }
+
+  // Ask the browser for the user's position only after they choose "My location".
+  useEffect(() => {
+    if (near !== 'me' || myPosition) return undefined;
+    if (!navigator.geolocation) {
+      setGeoState('unavailable');
+      return undefined;
+    }
+    let active = true;
+    setGeoState('locating');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (!active) return;
+        // Rounded to about 100 m before it is used in API requests.
+        setMyPosition({
+          latitude: Math.round(position.coords.latitude * 1000) / 1000,
+          longitude: Math.round(position.coords.longitude * 1000) / 1000,
+        });
+        setGeoState('idle');
+      },
+      () => {
+        if (active) setGeoState('unavailable');
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 }
+    );
+    return () => { active = false; };
+  }, [near, myPosition, geoAttempt]);
 
   useEffect(() => {
     let active = true;
@@ -498,8 +621,17 @@ export default function Equipment({ language = 'en' }) {
           process.env.REACT_APP_API_URL || '/api'
         ).replace(/\/+$/, '');
 
+        const query = {};
+        if (cityQuery) query.city = cityQuery;
+        if (referenceLat && referenceLng) {
+          query.lat = referenceLat;
+          query.lng = referenceLng;
+          if (radiusQuery) query.radiusKm = radiusQuery;
+        }
+
         const response = await axios.get(`${base}/equipment`, {
           signal: controller.signal,
+          ...(Object.keys(query).length ? { params: query } : {}),
         });
 
         if (!Array.isArray(response.data)) {
@@ -524,7 +656,7 @@ export default function Equipment({ language = 'en' }) {
       active = false;
       controller.abort();
     };
-  }, [reload]);
+  }, [reload, cityQuery, referenceLat, referenceLng, radiusQuery]);
 
   const invalidBudget =
     minimum !== '' &&
@@ -540,10 +672,12 @@ export default function Equipment({ language = 'en' }) {
       const type = findType(category, item.typeId);
 
       // Search translated category/type labels as well as listing text.
+      const city = findCity(item.city);
+      const places = [item.location, city?.name, city?.ka, city?.ru];
       const searchable = normalize([
         item.name,
         item.description,
-        item.location,
+        ...places,
         ...(category?.names ?? []),
         ...(type?.slice(1) ?? []),
       ].join(' '));
@@ -551,7 +685,7 @@ export default function Equipment({ language = 'en' }) {
       if (query && !searchable.includes(query)) return false;
       if (categoryId && item.categoryId !== categoryId) return false;
       if (typeId && item.typeId !== typeId) return false;
-      if (place && !normalize(item.location).includes(place)) return false;
+      if (place && !places.some((value) => normalize(value).includes(place))) return false;
       if (onlyAvailable && item.available !== true) return false;
       
       // Price type filter
@@ -567,6 +701,12 @@ export default function Equipment({ language = 'en' }) {
     });
 
     result.sort((a, b) => {
+      if (sort === 'distance' && reference) {
+        if (a.distanceKm == null && b.distanceKm == null) return b.timestamp - a.timestamp;
+        if (a.distanceKm == null) return 1;
+        if (b.distanceKm == null) return -1;
+        return a.distanceKm - b.distanceKm;
+      }
       if (sort === 'low' || sort === 'high') {
         const priceA = priceType === 'sale' ? a.salePrice : a.rentalPrice;
         const priceB = priceType === 'sale' ? b.salePrice : b.rentalPrice;
@@ -582,13 +722,30 @@ export default function Equipment({ language = 'en' }) {
     return result;
   }, [
     items, search, categoryId, typeId, location, priceType,
-    minimum, maximum, onlyAvailable, sort, locale,
+    minimum, maximum, onlyAvailable, sort, locale, reference,
   ]);
 
   const pageSize = 9;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const page = Math.min(pageNumber, totalPages);
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const unmappedCount = filtered.filter((item) => item.latitude == null).length;
+
+  const placeText = useCallback((item) => [
+    item.location,
+    cityLabel(findCity(item.city), lang),
+  ].filter(Boolean).join(', '), [lang]);
+  const distanceText = useCallback((item) => (
+    item.distanceKm == null ? '' : `${kilometres.format(item.distanceKm)} km`
+  ), [kilometres]);
+  const describeMapItem = useCallback((item) => [
+    item.listingType === 'sale' && item.salePrice != null
+      ? money.format(item.salePrice)
+      : item.rentalPrice != null ? `${money.format(item.rentalPrice)} ${t.perDay}` : '',
+    placeText(item),
+    distanceText(item),
+  ].filter(Boolean).join(' · '), [money, t, placeText, distanceText]);
+  const openEquipment = useCallback((id) => navigate(`/equipment/${id}`), [navigate]);
 
   const chips = [
     search && { key: 'search', text: `${t.search}: ${search}` },
@@ -598,6 +755,12 @@ export default function Equipment({ language = 'en' }) {
     },
     typeId && { key: 'type', text: currentType?.[labelIndex + 1] ?? typeId },
     location && { key: 'location', text: `${t.location}: ${location}` },
+    cityFilter && { key: 'city', text: `${t.city}: ${cityLabel(cityFilter, lang)}` },
+    (near === 'me' || nearCity) && {
+      key: 'near',
+      text: `${t.near}: ${near === 'me' ? t.myLocation : cityLabel(nearCity, lang)}`,
+    },
+    radius && { key: 'radius', text: `${t.within} ${radius} km` },
     priceType && { key: 'priceType', text: priceType === 'rental' ? t.rental : t.sale },
     minimum !== '' && { key: 'min', text: `${t.minimum}: ${money.format(Number(minimum))}` },
     maximum !== '' && { key: 'max', text: `${t.maximum}: ${money.format(Number(maximum))}` },
@@ -682,6 +845,65 @@ export default function Equipment({ language = 'en' }) {
           </div>
 
           <div className="br-field">
+            <label htmlFor="br-city">{t.city}</label>
+            <select
+              id="br-city"
+              value={cityFilter?.name ?? ''}
+              onChange={(event) => changeFilters({ city: event.target.value })}
+            >
+              <option value="">{t.allCities}</option>
+              {cityOptions(lang).map((city) => (
+                <option key={city.name} value={city.name}>{cityLabel(city, lang)}</option>
+              ))}
+            </select>
+          </div>
+
+          <fieldset className="br-budget">
+            <legend>{t.distance}</legend>
+            <div className="br-field">
+              <label htmlFor="br-near">{t.near}</label>
+              <select
+                id="br-near"
+                value={near === 'me' ? 'me' : nearCity?.name ?? ''}
+                onChange={(event) => changeFilters({
+                  near: event.target.value,
+                  sort: event.target.value ? 'distance' : sort === 'distance' ? '' : sort,
+                })}
+              >
+                <option value="">{t.nearNone}</option>
+                <option value="me">{t.myLocation}</option>
+                {cityOptions(lang).map((city) => (
+                  <option key={city.name} value={city.name}>{cityLabel(city, lang)}</option>
+                ))}
+              </select>
+            </div>
+            <button type="button" className="br-text-button br-locate" onClick={locateMe}>
+              {t.useMyLocation}
+            </button>
+            {near === 'me' && geoState === 'locating' && (
+              <p className="br-help" role="status">{t.locating}</p>
+            )}
+            {near === 'me' && geoState === 'unavailable' && !myPosition && (
+              <p className="br-validation" role="alert">{t.locationDenied}</p>
+            )}
+            <div className="br-field br-field--spaced">
+              <label htmlFor="br-radius">{t.within}</label>
+              <select
+                id="br-radius"
+                value={radius ?? ''}
+                onChange={(event) => changeFilters({ radius: event.target.value })}
+              >
+                <option value="">{t.anyDistance}</option>
+                {DISTANCE_OPTIONS_KM.map((km) => (
+                  <option key={km} value={km}>{km} km</option>
+                ))}
+              </select>
+            </div>
+            {radius && !reference && <p className="br-help">{t.chooseReference}</p>}
+            <p className="br-help">{t.distanceHint}</p>
+          </fieldset>
+
+          <div className="br-field">
             <label htmlFor="br-priceType">{t.priceType}</label>
             <select
               id="br-priceType"
@@ -759,6 +981,7 @@ export default function Equipment({ language = 'en' }) {
                 <option value="low">{t.low}</option>
                 <option value="high">{t.high}</option>
                 <option value="name">{t.name}</option>
+                {reference && <option value="distance">{t.nearest}</option>}
               </select>
 
               <div className="br-view-switch">
@@ -787,6 +1010,18 @@ export default function Equipment({ language = 'en' }) {
                     <path d="M4 5h16M4 12h16M4 19h16" />
                   </svg>
                 </button>
+                <button
+                  type="button"
+                  aria-label={t.mapView}
+                  title={t.mapView}
+                  aria-pressed={view === 'map'}
+                  onClick={() => changeFilters({ view: 'map' })}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z" />
+                    <circle cx="12" cy="10" r="2.2" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -801,7 +1036,9 @@ export default function Equipment({ language = 'en' }) {
                   onClick={() => changeFilters(
                     chip.key === 'category'
                       ? { category: '', type: '' }
-                      : { [chip.key]: '' }
+                      : chip.key === 'near'
+                        ? { near: '', radius: '', sort: sort === 'distance' ? '' : sort }
+                        : { [chip.key]: '' }
                   )}
                 >
                   {chip.text}<span aria-hidden="true">×</span>
@@ -839,7 +1076,23 @@ export default function Equipment({ language = 'en' }) {
             </div>
           )}
 
-          {status === 'ready' && pageItems.length > 0 && (
+          {status === 'ready' && view === 'map' && filtered.length > 0 && (
+            <div className="br-map-wrap">
+              <EquipmentMap
+                items={filtered}
+                reference={reference}
+                radiusKm={radiusQuery ? radius : null}
+                onOpen={openEquipment}
+                describe={describeMapItem}
+                labels={t}
+              />
+              {unmappedCount > 0 && (
+                <p className="br-help">{unmappedCount} {t.noCoordinates}</p>
+              )}
+            </div>
+          )}
+
+          {status === 'ready' && view !== 'map' && pageItems.length > 0 && (
             <>
               <div className={`br-cards br-cards--${view}`}>
                 {pageItems.map((item) => {
@@ -886,7 +1139,8 @@ export default function Equipment({ language = 'en' }) {
                         </p>
                         <p className="br-card-description">{item.description}</p>
                         <p className="br-card-location">
-                          {item.location || t.noLocation}
+                          {placeText(item) || t.noLocation}
+                          {item.distanceKm != null && ` · ${distanceText(item)}`}
                         </p>
 
                         <div className="br-card-footer">

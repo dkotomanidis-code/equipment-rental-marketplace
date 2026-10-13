@@ -22,6 +22,24 @@ async function migrate(db = pool) {
       if (!rows.length) await connection.query(`ALTER TABLE payments ADD COLUMN ${name} ${definition}`);
     }
 
+    const equipmentColumns = {
+      city: 'VARCHAR(100) NULL',
+      latitude: 'DECIMAL(10, 8) NULL',
+      longitude: 'DECIMAL(11, 8) NULL',
+    };
+    for (const [name, definition] of Object.entries(equipmentColumns)) {
+      const [rows] = await connection.execute(
+        `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'equipment' AND COLUMN_NAME = ?`, [name]
+      );
+      if (!rows.length) await connection.query(`ALTER TABLE equipment ADD COLUMN ${name} ${definition}`);
+    }
+    const [cityIndex] = await connection.execute(
+      `SELECT INDEX_NAME FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'equipment' AND INDEX_NAME = 'idx_equipment_city'`
+    );
+    if (!cityIndex.length) await connection.query('CREATE INDEX idx_equipment_city ON equipment(city)');
+
     const [tokenVersion] = await connection.execute(
       `SELECT COLUMN_NAME FROM information_schema.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'token_version'`

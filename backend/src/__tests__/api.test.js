@@ -231,6 +231,84 @@ describe('equipment', () => {
     expect(pool.execute.mock.calls[1][0]).toContain('SET name = ?');
     expect(pool.execute.mock.calls[1][1]).toEqual(['Camera', '4', 1]);
   });
+  test('listing filters by canonical Georgia city and preserves old clients', async () => {
+    pool.execute.mockResolvedValue([[item]]);
+    const result = await request('GET', '/equipment?city=%E1%83%91%E1%83%90%E1%83%97%E1%83%A3%E1%83%9B%E1%83%98');
+    expect(result.status).toBe(200);
+    expect(pool.execute.mock.calls[0][0]).toContain('city = ?');
+    expect(pool.execute.mock.calls[0][0]).toContain('ORDER BY id DESC');
+    expect(pool.execute.mock.calls[0][1]).toEqual(['Batumi']);
+    expect(result.body[0].distanceKm).toBeUndefined();
+  });
+  test('reference point adds rounded distance and nearest-first ordering without hiding unlocated listings', async () => {
+    pool.execute.mockResolvedValue([[{ ...item, distanceKm: 3.14159 }, { ...item, id: 5, distanceKm: null }]]);
+    const result = await request('GET', '/equipment?lat=41.7151&lng=44.8271');
+    expect(result.status).toBe(200);
+    expect(result.body.map((row) => row.distanceKm)).toEqual([3.14, null]);
+    const [sql, values] = pool.execute.mock.calls[0];
+    expect(sql).toContain('AS distanceKm');
+    expect(sql).toContain('ORDER BY distanceKm IS NULL, distanceKm ASC, id DESC');
+    expect(sql).not.toContain('WHERE');
+    expect(values).toEqual([41.7151, 41.7151, 44.8271]);
+  });
+  test('radius filter only returns located listings within the distance', async () => {
+    pool.execute.mockResolvedValue([[]]);
+    const result = await request('GET', '/equipment?city=Tbilisi&lat=41.7&lng=44.8&radiusKm=25');
+    expect(result.status).toBe(200);
+    const [sql, values] = pool.execute.mock.calls[0];
+    expect(sql).toContain('latitude IS NOT NULL AND longitude IS NOT NULL');
+    expect(values).toEqual([41.7, 41.7, 44.8, 'Tbilisi', 41.7, 41.7, 44.8, 25]);
+  });
+  test.each([
+    '/equipment?city=Paris', '/equipment?lat=41.7', '/equipment?lat=91&lng=44',
+    '/equipment?lat=abc&lng=44', '/equipment?radiusKm=10', '/equipment?lat=41&lng=44&radiusKm=0',
+    '/equipment?lat=41&lng=44&radiusKm=5000', '/equipment?lat=41&lat=42&lng=44',
+  ])('rejects invalid location filters: %s', async (path) => {
+    expect((await request('GET', path)).status).toBe(400);
+    expect(pool.execute).not.toHaveBeenCalled();
+  });
+  test('creation stores a canonical city and defaults coordinates to the city centre', async () => {
+    pool.execute.mockResolvedValueOnce([{ insertId: 4 }]).mockResolvedValueOnce([[item]]);
+    const result = await asUser('POST', '/equipment', {
+      name: 'Camera', pricePerDay: 12.34, location: 'Saburtalo', city: 'tbilisi',
+    }, owner);
+    expect(result.status).toBe(201);
+    expect(pool.execute.mock.calls[0][0]).toContain('city, latitude, longitude');
+    expect(pool.execute.mock.calls[0][1].slice(5, 9)).toEqual(['Saburtalo', 'Tbilisi', 41.7151, 44.8271]);
+  });
+  test('creation without location fields stores null city and coordinates', async () => {
+    pool.execute.mockResolvedValueOnce([{ insertId: 4 }]).mockResolvedValueOnce([[item]]);
+    expect((await asUser('POST', '/equipment', { name: 'Camera', pricePerDay: 12.34 }, owner)).status).toBe(201);
+    expect(pool.execute.mock.calls[0][1].slice(6, 9)).toEqual([null, null, null]);
+  });
+  test('creation accepts explicit coordinates', async () => {
+    pool.execute.mockResolvedValueOnce([{ insertId: 4 }]).mockResolvedValueOnce([[item]]);
+    expect((await asUser('POST', '/equipment', {
+      name: 'Camera', pricePerDay: 12.34, city: 'Batumi', latitude: 41.65, longitude: 41.64,
+    }, owner)).status).toBe(201);
+    expect(pool.execute.mock.calls[0][1].slice(6, 9)).toEqual(['Batumi', 41.65, 41.64]);
+  });
+  test.each([
+    { city: 'Paris' }, { city: 5 }, { latitude: 41.7 }, { latitude: 91, longitude: 44 },
+    { latitude: '41.7', longitude: '44.8' }, { latitude: 41.7, longitude: null },
+  ])('rejects invalid location fields %o', async (fields) => {
+    expect((await asUser('POST', '/equipment', { name: 'Camera', pricePerDay: 12.34, ...fields }, owner)).status).toBe(400);
+    expect((await asUser('PUT', '/equipment/4', fields, owner)).status).toBe(400);
+    expect(pool.execute).not.toHaveBeenCalled();
+  });
+  test('owner can update only the city, which also updates coordinates', async () => {
+    pool.execute.mockResolvedValueOnce([[{ owner_id: 1 }]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]).mockResolvedValueOnce([[item]]);
+    expect((await asUser('PUT', '/equipment/4', { city: 'Kutaisi' }, owner)).status).toBe(200);
+    expect(pool.execute.mock.calls[1][0]).toContain('SET city = ?, latitude = ?, longitude = ?');
+    expect(pool.execute.mock.calls[1][1]).toEqual(['Kutaisi', 42.2679, 42.6946, '4', 1]);
+  });
+  test('clearing the city clears city-derived coordinates', async () => {
+    pool.execute.mockResolvedValueOnce([[{ owner_id: 1 }]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]).mockResolvedValueOnce([[item]]);
+    expect((await asUser('PUT', '/equipment/4', { name: 'Camera', city: '' }, owner)).status).toBe(200);
+    expect(pool.execute.mock.calls[1][1]).toEqual(['Camera', null, null, null, '4', 1]);
+  });
   test('owner can delete equipment', async () => {
     pool.execute.mockResolvedValueOnce([[{ owner_id: 1 }]]).mockResolvedValueOnce([{ affectedRows: 1 }]);
     expect((await asUser('DELETE', '/equipment/4', undefined, owner)).body).toEqual({ message: 'Equipment deleted' });

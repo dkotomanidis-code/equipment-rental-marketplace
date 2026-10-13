@@ -10,6 +10,18 @@ A full-stack web application where users can rent and list equipment.
 - Reviews and ratings
 - Payment processing (Stripe ready)
 - Search and filter equipment
+- Georgia city selection, distance filtering ("use my location" or a city) and a map view
+
+### Location search
+- Cities come from a curated list of major cities in Georgia with coordinates
+  (`backend/src/data/georgiaCities.json`, mirrored in `frontend/src/data/`).
+- `GET /api/equipment` accepts optional `city`, `lat` + `lng` (adds `distanceKm`
+  and sorts nearest first) and `radiusKm` (up to 1000 km, requires `lat`/`lng`).
+  Listings without coordinates are still returned unless `radiusKm` is used.
+- `POST`/`PUT /api/equipment` accept optional `city` (canonical name or Georgian/
+  Russian label) and `latitude`/`longitude` (sent together). A city without
+  coordinates uses the city centre.
+- Existing databases need `npm run db:migrate` (from `backend/`) once.
 
 ## Tech Stack
 

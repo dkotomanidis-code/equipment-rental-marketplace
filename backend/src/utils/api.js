@@ -34,7 +34,7 @@ function rentalDays(startDate, endDate) {
 }
 
 const equipmentColumns = `id, owner_id AS ownerId, name, description, category,
-  price_per_day AS pricePerDay, location, image_url AS imageUrl,
+  price_per_day AS pricePerDay, location, city, latitude, longitude, image_url AS imageUrl,
   availability_status AS availabilityStatus, created_at AS createdAt`;
 
 const bookingColumns = `b.id, b.renter_id AS renterId, b.equipment_id AS equipmentId,
@@ -42,10 +42,13 @@ const bookingColumns = `b.id, b.renter_id AS renterId, b.equipment_id AS equipme
   b.status, b.payment_status AS paymentStatus, b.payment_id AS paymentId,
   b.created_at AS createdAt`;
 
-const equipmentResponse = (item) => ({
-  ...item,
-  availabilityStatus: Boolean(item.availabilityStatus),
-});
+const equipmentResponse = (item) => {
+  const response = { ...item, availabilityStatus: Boolean(item.availabilityStatus) };
+  if (item.distanceKm !== undefined) {
+    response.distanceKm = item.distanceKm === null ? null : Math.round(Number(item.distanceKm) * 100) / 100;
+  }
+  return response;
+};
 
 module.exports = {
   asyncRoute, validId, validText, priceCents, rentalDays,
