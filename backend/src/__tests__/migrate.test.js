@@ -21,6 +21,7 @@ function database(existing = [], duplicateReviews = []) {
       if (sql.includes('ADD COLUMN')) columns.add(sql.match(/ADD COLUMN (\w+)/)[1]);
       if (sql.includes('ADD UNIQUE KEY')) indexes.add('uq_reviews_booking_reviewer');
       if (sql.includes('ADD INDEX')) indexes.add('idx_reviews_booking_created');
+      if (sql.includes('CREATE INDEX')) indexes.add(sql.match(/CREATE INDEX (\w+)/)[1]);
       if (sql.includes('GROUP BY booking_id')) return [duplicateReviews];
       return [[]];
     }),
@@ -70,4 +71,27 @@ test('migration failures release the advisory lock and connection', async () => 
   await expect(migrate(db)).rejects.toThrow('DDL failed');
   expect(db.connection.execute.mock.calls.some(([sql]) => sql.includes('RELEASE_LOCK'))).toBe(true);
   expect(db.connection.release).toHaveBeenCalled();
+});
+
+test('adds equipment location columns and city index once, without rewriting listings', async () => {
+  const db = database();
+  await migrate(db);
+  const locationDdl = () => db.connection.query.mock.calls.map(([sql]) => sql)
+    .filter((sql) => sql.startsWith('ALTER TABLE equipment') || sql.includes('idx_equipment_city'));
+  expect(locationDdl()).toEqual([
+    'ALTER TABLE equipment ADD COLUMN city VARCHAR(100) NULL',
+    'ALTER TABLE equipment ADD COLUMN latitude DECIMAL(10, 8) NULL',
+    'ALTER TABLE equipment ADD COLUMN longitude DECIMAL(11, 8) NULL',
+    'CREATE INDEX idx_equipment_city ON equipment(city)',
+  ]);
+  await migrate(db);
+  expect(locationDdl()).toHaveLength(4);
+  expect(db.connection.query.mock.calls.some(([sql]) => /UPDATE equipment|DELETE FROM equipment/.test(sql))).toBe(false);
+});
+
+test('keeps existing equipment coordinate columns', async () => {
+  const db = database(['latitude', 'longitude']);
+  await migrate(db);
+  expect(db.connection.query.mock.calls.filter(([sql]) => sql.startsWith('ALTER TABLE equipment')))
+    .toEqual([['ALTER TABLE equipment ADD COLUMN city VARCHAR(100) NULL']]);
 });

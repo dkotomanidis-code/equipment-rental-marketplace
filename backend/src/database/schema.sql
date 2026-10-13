@@ -26,6 +26,7 @@ CREATE TABLE equipment (
   price_per_day DECIMAL(10, 2),
   sale_price DECIMAL(10, 2),
   location VARCHAR(255),
+  city VARCHAR(100),
   latitude DECIMAL(10, 8),
   longitude DECIMAL(11, 8),
   image_url VARCHAR(255),
@@ -112,6 +113,7 @@ CREATE INDEX idx_bookings_payment_id ON bookings(payment_id);
 CREATE INDEX idx_payments_booking_id ON payments(booking_id);
 CREATE INDEX idx_reviews_booking_id ON reviews(booking_id);
 CREATE INDEX idx_equipment_category ON equipment(category);
+CREATE INDEX idx_equipment_city ON equipment(city);
 CREATE INDEX idx_bookings_status ON bookings(status);
 CREATE INDEX idx_payments_status ON payments(status);
 CREATE INDEX idx_recovery_codes_user_id ON recovery_codes(user_id);
