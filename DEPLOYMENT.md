@@ -47,7 +47,12 @@ setup command against an existing production database. For an existing schema:
    the migration never deletes historical reviews automatically.
 4. From `backend/`, run `npm run db:migrate`. This repeatable additive migration
    preserves refund-column upgrades and adds token-version revocation, unique
-   review enforcement, indexes, and favorites/chat/notification tables.
+   review enforcement, indexes, favorites/chat/notification tables, and the
+   nullable equipment location columns (`city`, `latitude`, `longitude`) with
+   an `idx_equipment_city` index. Existing listings keep `NULL` location values
+   and remain browsable; owners can set a city from the listing's Edit page.
+   The API selects these columns, so run the migration before deploying the
+   new backend.
 5. Verify the API readiness endpoint and perform the two-account smoke tests
    below before reopening traffic.
 
@@ -83,6 +88,11 @@ Frontend build-time variables:
 ```dotenv
 REACT_APP_API_URL=https://api.example.com/api
 REACT_APP_STRIPE_PUBLISHABLE_KEY=<matching-Stripe-publishable-key>
+# Optional: map tiles for the Browse page map view. Defaults to the public
+# OpenStreetMap tile server, which is meant for light use only; for production
+# traffic use a tile provider you have an agreement with.
+# REACT_APP_MAP_TILE_URL=https://tiles.example.com/{z}/{x}/{y}.png
+# REACT_APP_MAP_TILE_ATTRIBUTION=&copy; Example tiles, &copy; OpenStreetMap contributors
 ```
 
 Do not configure production `CORS_ORIGINS` as `*`. Set a comma-separated,

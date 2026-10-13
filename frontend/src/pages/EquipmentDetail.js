@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import FavoriteButton from '../components/FavoriteButton';
 import { API_BASE, authConfig } from '../utils/api';
+import { cityLabel, findCity } from '../data/georgiaCities';
 import '../styles/Features.css';
 
 const LABELS = {
@@ -12,6 +13,7 @@ const LABELS = {
     average: 'Average', noReviews: 'No reviews yet.', addReview: 'Add a review', rating: 'Rating', comment: 'Comment',
     submit: 'Submit review', signIn: 'Sign in to review', noBooking: 'A completed booking is required to review this equipment.',
     reviewError: 'Could not submit review.', reviewSuccess: 'Review submitted.', bookings: 'Completed booking',
+    edit: 'Edit listing',
   },
   ka: {
     title: 'ტექნიკის დეტალები', price: 'ფასი', perDay: 'დღეში', location: 'მდებარეობა', description: 'აღწერა',
@@ -19,6 +21,7 @@ const LABELS = {
     average: 'საშუალო', noReviews: 'მიმოხილვები ჯერ არ არის.', addReview: 'მიმოხილვის დამატება', rating: 'რეიტინგი', comment: 'კომენტარი',
     submit: 'მიმოხილვის გაგზავნა', signIn: 'შედით მიმოხილვის დასაწერად', noBooking: 'მიმოხილვისთვის დასრულებული ჯავშანია საჭირო.',
     reviewError: 'მიმოხილვის გაგზავნა ვერ მოხერხდა.', reviewSuccess: 'მიმოხილვა გაიგზავნა.', bookings: 'დასრულებული ჯავშანი',
+    edit: 'განცხადების რედაქტირება',
   },
   ru: {
     title: 'Информация об оборудовании', price: 'Цена', perDay: 'в день', location: 'Местоположение', description: 'Описание',
@@ -26,6 +29,7 @@ const LABELS = {
     average: 'Средняя оценка', noReviews: 'Отзывов пока нет.', addReview: 'Оставить отзыв', rating: 'Оценка', comment: 'Комментарий',
     submit: 'Отправить отзыв', signIn: 'Войдите, чтобы оставить отзыв', noBooking: 'Для отзыва требуется завершённая аренда.',
     reviewError: 'Не удалось отправить отзыв.', reviewSuccess: 'Отзыв отправлен.', bookings: 'Завершённая аренда',
+    edit: 'Редактировать объявление',
   },
 };
 
@@ -127,11 +131,17 @@ export default function EquipmentDetail({ language = 'en' }) {
         <section>
           <h1>{equipment.name}</h1>
           <p><strong>{t.price}:</strong> ${equipment.pricePerDay} {t.perDay}</p>
-          <p><strong>{t.location}:</strong> {equipment.location || '—'}</p>
+          <p><strong>{t.location}:</strong> {[
+            equipment.location,
+            cityLabel(findCity(equipment.city), language),
+          ].filter(Boolean).join(', ') || '—'}</p>
           <p><strong>{t.description}:</strong> {equipment.description || '—'}</p>
           <div className="feature-actions">
             <button type="button" onClick={() => navigate(`/booking/${id}`)}>{t.book}</button>
             {userId !== equipment.ownerId && <button type="button" onClick={contactOwner}>{t.contact}</button>}
+            {userId != null && userId === equipment.ownerId && (
+              <button type="button" onClick={() => navigate(`/list-equipment?edit=${id}`)}>{t.edit}</button>
+            )}
             <FavoriteButton equipmentId={id} language={language} />
           </div>
         </section>
