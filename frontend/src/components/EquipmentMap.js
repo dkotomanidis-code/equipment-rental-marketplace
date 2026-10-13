@@ -83,7 +83,7 @@ export default function EquipmentMap({
         fillColor: '#d6b66b',
         fillOpacity: 0.9,
       })
-        .bindTooltip(group.length > 1 ? `${group.length} ${labels.listings}` : group[0].name)
+        .bindTooltip(element('span', null, group.length > 1 ? `${group.length} ${labels.listings}` : group[0].name))
         .bindPopup(popup)
         .addTo(layer);
     });
@@ -98,7 +98,7 @@ export default function EquipmentMap({
       }
       L.circleMarker(point, {
         radius: 7, color: '#ffffff', weight: 2, fillColor: '#3b82f6', fillOpacity: 1,
-      }).bindTooltip(labels.reference).addTo(layer);
+      }).bindTooltip(element('span', null, labels.reference)).addTo(layer);
     }
 
     if (reference && radiusKm) {
